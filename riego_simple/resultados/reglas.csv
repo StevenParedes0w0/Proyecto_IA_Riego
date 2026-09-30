@@ -1,0 +1,10 @@
+regla,humedad,dias_sin_riego,consecuente_base,consecuente_ga
+R1,Baja,Reciente,Media,Media
+R2,Baja,Intermedio,Alta,Alta
+R3,Baja,Lejano,Alta,Baja
+R4,Media,Reciente,Baja,Media
+R5,Media,Intermedio,Media,Baja
+R6,Media,Lejano,Alta,Media
+R7,Alta,Reciente,Baja,Media
+R8,Alta,Intermedio,Baja,Alta
+R9,Alta,Lejano,Media,Media

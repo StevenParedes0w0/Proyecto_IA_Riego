@@ -1,0 +1,1156 @@
+\documentclass[11pt,letterpaper]{article}
+
+% Compilar desde esta carpeta con: latexmk -pdf -interaction=nonstopmode Informe_Final_Sistema_Inteligente_Riego.tex
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[letterpaper,top=2.35cm,bottom=2.5cm,left=2.45cm,right=2.45cm]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{graphicx}
+\graphicspath{{imagenes/}}
+\usepackage{enumitem}
+\usepackage{longtable,booktabs,tabularx,array,multirow}
+\usepackage{caption,subcaption,float,placeins}
+\usepackage{fancyhdr,multicol}
+\usepackage[table]{xcolor}
+\usepackage{colortbl}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,shapes.geometric,backgrounds,decorations.pathreplacing,matrix}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{listings}
+\usepackage{setspace}
+\usepackage{microtype}
+\usepackage{xurl}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=azulUTA!75!black,citecolor=azulUTA!75!black,urlcolor=azulUTA!75!black,pdftitle={Sistema genético-difuso para estimación condicional de volumen nominal de riego},pdfauthor={Maybelline Estefanía Navarro Pazmiño; Steven Eduardo Paredes Medina}}
+
+% Paleta académica y estilos visuales consistentes.
+\definecolor{azulUTA}{RGB}{31,91,153}
+\definecolor{azulClaro}{RGB}{230,240,255}
+\definecolor{azulMedio}{RGB}{180,210,240}
+\definecolor{verdeClaro}{RGB}{231,246,235}
+\definecolor{verdeOscuro}{RGB}{32,120,80}
+\definecolor{naranjaClaro}{RGB}{255,248,230}
+\definecolor{naranjaOscuro}{RGB}{157,97,15}
+\definecolor{moradoClaro}{RGB}{241,234,250}
+\definecolor{grisCodigo}{RGB}{247,247,247}
+\definecolor{grisBorde}{RGB}{205,211,218}
+\definecolor{rojoOscuro}{RGB}{160,45,45}
+
+\renewcommand{\arraystretch}{1.2}
+\setlist[itemize]{topsep=4pt,itemsep=3pt,parsep=1pt,leftmargin=*}
+\setlist[enumerate]{topsep=4pt,itemsep=3pt,parsep=1pt,leftmargin=*}
+\onehalfspacing
+\setlength{\parindent}{0.85cm}
+\setlength{\parskip}{0.22em}
+\setlength{\emergencystretch}{3em}
+\setlength{\headheight}{15pt}
+\captionsetup{font=small,labelfont=bf}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{azulUTA}Estimación condicional de volumen nominal de riego}
+\fancyhead[R]{\small Inteligencia Artificial}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.35pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyhead[L]{\small\color{azulUTA}Estimación condicional de volumen nominal de riego}\fancyhead[R]{\small Inteligencia Artificial}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0.35pt}}
+
+\lstdefinestyle{codigo}{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{grisCodigo},
+  frame=single,
+  rulecolor=\color{grisBorde},
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  keywordstyle=\bfseries\color{azulUTA},
+  commentstyle=\itshape\color{verdeOscuro},
+  stringstyle=\color{rojoOscuro},
+  tabsize=4,
+  literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1 {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {¿}{{?`}}1 {¡}{{!`}}1
+}
+\lstset{style=codigo}
+
+\newcommand{\codigo}[1]{\texttt{\small #1}}
+\newcommand{\Lnom}{\,\mathrm{L}_{\mathrm{nom}}}
+\newcommand{\clip}{\operatorname{clip}}
+\newcommand{\MAE}{\mathrm{MAE}}
+\newcommand{\RMSE}{\mathrm{RMSE}}
+\newcommand{\MedAE}{\mathrm{MedAE}}
+\newcommand{\nota}[1]{\begin{center}\fcolorbox{azulUTA!60}{azulClaro}{\begin{minipage}{0.93\textwidth}\textbf{Nota metodológica.} #1\end{minipage}}\end{center}}
+\newcommand{\hallazgo}[1]{\begin{center}\fcolorbox{verdeOscuro!70}{verdeClaro}{\begin{minipage}{0.93\textwidth}\textbf{Hallazgo principal.} #1\end{minipage}}\end{center}}
+\newcommand{\limite}[1]{\begin{center}\fcolorbox{naranjaOscuro!70}{naranjaClaro}{\begin{minipage}{0.93\textwidth}\textbf{Límite de interpretación.} #1\end{minipage}}\end{center}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\grado}{\mu}
+
+\begin{document}
+\shorthandoff{<>}
+
+% Portada basada en la composición institucional solicitada.
+\hypersetup{pageanchor=false}
+\begin{titlepage}
+  \thispagestyle{empty}
+  \begin{center}
+    {\large\bfseries UNIVERSIDAD TÉCNICA DE AMBATO}\\[0.20cm]
+    {\normalsize\bfseries FACULTAD DE INGENIERÍA EN SISTEMAS, ELECTRÓNICA E INDUSTRIAL}\\[0.15cm]
+    {\normalsize\bfseries CARRERA DE SOFTWARE}\\[0.15cm]
+    {\small\bfseries CICLO ACADÉMICO: JULIO -- DICIEMBRE 2026}
+
+    \vspace{0.4cm}
+    \includegraphics[width=4.0cm]{uta.png}
+
+    \vspace{0.35cm}
+    {\Large\bfseries INFORME TÉCNICO DEL PROYECTO}\\[0.30cm]
+    {\LARGE\bfseries\color{azulUTA}Sistema genético-difuso para estimación condicional de volumen nominal de riego}\\[0.35cm]
+    {\large\textit{Inferencia Mamdani continua y optimización genética de reglas sobre Arnesano 2025}}
+
+    \vspace{0.55cm}
+    \fcolorbox{azulUTA!55}{azulClaro}{%
+      \begin{minipage}{0.90\textwidth}
+        \vspace{0.25cm}
+        \renewcommand{\arraystretch}{1.25}
+        \begin{tabular}{@{\hspace{0.35cm}}>{\bfseries\color{azulUTA}}l @{} l@{}}
+          Unidad de Organización Curricular: & Profesional. \\
+          Asignatura: & Inteligencia Artificial. \\
+          Nivel y paralelo: & Séptimo semestre -- Paralelo ``A''. \\
+          Docente: & Ing. Rubén Eduardo Nogales Portero, Mg. \\
+          Estudiantes: & Navarro Pazmiño Maybelline Estefanía \\
+                       & Paredes Medina Steven Eduardo \\
+          Fecha: & 29 de septiembre de 2026.
+        \end{tabular}
+        \vspace{0.25cm}
+      \end{minipage}%
+    }
+
+    \vfill
+    {\bfseries Ambato -- Ecuador}\\[0.12cm]
+    {\small 2026}
+  \end{center}
+\end{titlepage}
+\hypersetup{pageanchor=true}
+
+\pagenumbering{roman}
+\section*{Resumen ejecutivo}
+\addcontentsline{toc}{section}{Resumen ejecutivo}
+Este informe documenta el diseño, la implementación y la evaluación de un sistema de inferencia difusa Mamdani cuya salida es una cantidad continua expresada en litros nominales. Para cada sector y día se construye una observación con decisión a las 06:00, empleando únicamente una medición de suelo ya disponible, la humedad relativa al MADP del sector y los días transcurridos desde la finalización del último riego estándar. La salida objetivo es la suma de los volúmenes nominales asociados a eventos estándar que se solapan con la ventana futura de 24 horas. La estimación es condicional: se estudian las filas históricas para las que se observó al menos un evento estándar. El sistema no determina si se debe iniciar el riego.
+
+La base de conocimiento contiene nueve reglas derivadas de las tres etiquetas lingüísticas de cada una de las dos entradas. Las funciones de pertenencia, el motor de inferencia y la defuzzificación por centroide se mantienen fijos. Un algoritmo genético representa las conclusiones de las nueve reglas con un cromosoma ternario y optimiza exclusivamente esos consecuentes usando el error absoluto medio sobre TRAIN. La evaluación emplea una partición temporal fijada en el 28 de junio de 2025, una purga de cuatro observaciones del día de frontera y un bloque posterior de la misma temporada.
+
+La cronología contiene 707 filas: 473 de TRAIN, cuatro purgadas y 230 de TEST. Tras la separación, el problema condicional conserva 142 positivos en TRAIN y 56 en TEST. En TEST, Mamdani Base obtiene MAE de 277,48 L y Mamdani + GA obtiene 241,44 L. La mediana de TRAIN alcanza 188,98 L, por lo que constituye una referencia más precisa que ambos sistemas difusos en este periodo. La diferencia de escala entre conjuntos y la composición por sectores se presentan explícitamente. El trabajo demuestra una implementación reproducible de inferencia Mamdani continua y optimización genética de consecuentes; no afirma superioridad predictiva, dosis agronómica óptima ni generalización fuera de la finca y temporada observadas.
+
+\textbf{Palabras clave:} lógica difusa, Mamdani, algoritmo genético, riego, volumen nominal, evaluación temporal.
+
+\section*{Abstract}
+\addcontentsline{toc}{section}{Abstract}
+This report describes the design, implementation, and evaluation of a Mamdani fuzzy inference system that returns a continuous nominal irrigation-volume estimate. Each sector-day observation is formed at 06:00 using information already available at that time. The inputs are soil moisture relative to the sector MADP and elapsed days since the last completed standard-irrigation event. The target sums nominal volumes associated with standard events overlapping the following 24-hour window. The task is conditional on at least one such event being observed; the system does not decide whether irrigation should start. A fixed Mamdani engine evaluates nine rules, while a ternary genetic algorithm optimizes only their consequents using TRAIN MAE. Chronological evaluation within the 2025 Arnesano season shows that the genetic system improves on the hand-specified rule base, but does not outperform the TRAIN-median baseline. The report therefore presents both implementation evidence and predictive limitations without claiming agronomic optimality or external generalization.
+
+\textbf{Keywords:} fuzzy inference, Mamdani, genetic algorithm, irrigation, nominal volume, temporal evaluation.
+
+\tableofcontents
+\clearpage
+\listoffigures
+\clearpage
+\listoftables
+\clearpage
+\pagenumbering{arabic}
+
+\section{Introducción}
+La programación del riego es un problema de decisión que depende de la interacción entre suelo, cultivo, clima, disponibilidad de agua y operación del sistema. Una representación computacional de este proceso debe definir con precisión qué información conoce en el instante de decisión, qué resultado intenta estimar y con qué evidencia se evalúa. Este trabajo delimita el problema a una tarea reproducible de cantidad: dado un estado observado a las 06:00, estimar el volumen nominal total asociado a eventos de riego estándar que se observan en la siguiente ventana de 24 horas.
+
+La elección de una salida continua permite construir una inferencia Mamdani cuyo resultado no se reduce a una etiqueta binaria. La lógica difusa representa conceptos graduales mediante grados de pertenencia y expresa relaciones mediante reglas legibles. La optimización genética explora variantes de los consecuentes de esas reglas, conservando constante el sistema de inferencia. Esta separación conceptual hace posible identificar con claridad qué componente aporta cada cálculo: los datos definen entradas y objetivo; Mamdani transforma las entradas en una cantidad; el algoritmo genético selecciona la asignación de consecuentes con menor error de entrenamiento.
+
+El estudio utiliza exclusivamente la temporada Arnesano 2025 de un dataset IoT multisector. Se organiza el registro cronológicamente, se reserva un bloque posterior para prueba y se purga la frontera necesaria para respetar el horizonte de etiqueta. La evaluación contrasta la base manual y la base optimizada contra predicciones constantes basadas en TRAIN. Además de las métricas globales, se inspeccionan cantidades y errores por sector porque la distribución temporal no es homogénea.
+
+\subsection{Organización del informe}
+Los capítulos presentan, en orden, el alcance del problema, fundamentos, datos, construcción de observaciones y objetivo, diseño difuso, optimización genética, partición temporal, implementación, protocolo experimental, resultados, análisis, límites y conclusiones. Los apéndices reúnen ecuaciones de referencia, una guía de ejecución, la correspondencia entre funciones y etapas, el inventario de archivos de resultado, preguntas de reproducibilidad y un glosario. La intención es que cada afirmación metodológica pueda rastrearse al código, al CSV de resultados o a la fuente de datos.
+
+\section{Problema, objetivo y alcance}
+\subsection{Objetivo general}
+Estimar mediante inferencia difusa Mamdani el volumen nominal total asociado a los riegos estándar observados durante las 24 horas posteriores a una observación sector-día de las 06:00, para los casos en que se observa al menos un riego estándar en dicha ventana; optimizar mediante un algoritmo genético únicamente los consecuentes de las nueve reglas con el periodo cronológico inicial de Arnesano 2025.
+
+\subsection{Objetivos específicos}
+\begin{enumerate}
+  \item Construir observaciones diarias por sector con variables disponibles antes o a las 06:00 y excluir mediciones no terminadas, faltantes o fuera de rango.
+  \item Definir un objetivo numérico reproducible a partir del solapamiento temporal de eventos estándar con una ventana de 24 horas y el caudal nominal documentado para cada sector.
+  \item Diseñar dos entradas difusas con tres términos lingüísticos cada una y una base de nueve reglas Mamdani.
+  \item Implementar una salida difusa continua en litros nominales usando cuantiles de TRAIN y defuzzificación por centroide.
+  \item Codificar las nueve conclusiones de reglas como genes ternarios y optimizarlas mediante selección, cruce, mutación y elitismo.
+  \item Evaluar en un periodo posterior de la misma temporada, contrastar con la base manual y con referencias constantes, y documentar resultados agregados y por sector.
+\end{enumerate}
+
+\subsection{Preguntas que guía la evaluación}
+\begin{enumerate}
+  \item ¿La asignación de consecuentes obtenida por el GA reduce el MAE de TEST respecto de la base Mamdani manual?
+  \item ¿La combinación Mamdani + GA supera las referencias constantes calculadas exclusivamente con TRAIN?
+  \item ¿Cómo cambia la distribución de volúmenes positivos entre los periodos inicial y posterior y entre sectores?
+  \item ¿Qué límites de interpretación se desprenden de la definición nominal del objetivo, de la composición de TEST y del alcance intra-temporada?
+\end{enumerate}
+
+\subsection{Definición operacional del problema}
+Sea $x_{s,d}$ la observación de un sector $s$ en el día $d$, disponible a las 06:00. Sean $H_{s,d}$ la humedad de suelo, $M_s$ el MADP del sector y $D_{s,d}$ los días desde el fin del último riego estándar. Las entradas son $x_1=H_{s,d}-M_s$ y $x_2=D_{s,d}$. El objetivo $V_{s,d}$ es la suma de minutos solapados de todos los eventos estándar del sector con la ventana semiabierta $[t_0,t_0+24\,\mathrm{h})$, multiplicada por el caudal nominal $q_s$. Se define el subconjunto condicional $\mathcal{P}=\{(s,d): V_{s,d}>0\}$. El sistema estima $\widehat V=f(x_1,x_2)$ para filas de $\mathcal{P}$; no estima $\Pr(V>0\mid x)$ ni una acción de control.
+
+\begin{table}[H]
+\centering\small
+\caption{Definición de términos del problema.}\label{tab:terminos-problema}
+\begin{tabularx}{\textwidth}{p{3.5cm}X}
+\toprule
+Término & Definición operacional en este estudio\\
+\midrule
+Instante de decisión & 06:00 de cada fecha para cada sector con medición disponible.\\
+Entrada de humedad & Humedad de suelo menos MADP específico del sector.\\
+Entrada temporal & Días desde el final del último evento estándar, limitado a 30.\\
+Evento elegible & Evento con tipo \codigo{standard\_irrigation}; fertirrigación se excluye.\\
+Ventana objetivo & Intervalo semiabierto desde las 06:00 hasta las 06:00 del día siguiente.\\
+Volumen objetivo & Reconstrucción nominal duración-solapamiento por caudal nominal sectorial.\\
+Condición del modelo & Se considera cantidad solo si se observa al menos un evento elegible.\\
+Salida & Cantidad continua defuzzificada, en litros nominales.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Alcance y no objetivos}
+El alcance es deliberadamente verificable: dos entradas, nueve reglas, salida continua y búsqueda genética de consecuentes. Se excluye la clasificación de ocurrencia, la decisión de abrir o cerrar válvulas, el cálculo de dosis agronómica óptima, una comparación entre años, la transferencia entre fincas y el análisis causal del comportamiento de los regantes. Tampoco se interpreta el volumen nominal como una medición independiente por contador.
+
+\nota{La condición positiva de la etiqueta se conoce al reconstruir el registro histórico. En una consulta operativa real esa condición no está disponible a las 06:00; el programa no la predice. Por ello la estimación es condicional y no sustituye un módulo que determine si corresponde regar.}
+
+\section{Fundamentos conceptuales}
+\subsection{Sistemas basados en reglas}
+Un sistema basado en reglas representa conocimiento mediante expresiones condicionales del tipo SI--ENTONCES. En una versión nítida, cada antecedente suele ser verdadero o falso. La lógica difusa amplía esa representación permitiendo que una entrada participe parcialmente en varios términos lingüísticos. Las reglas siguen siendo comprensibles, pero sus activaciones y conclusiones se combinan mediante operadores definidos.
+
+\subsection{Conjuntos difusos y grados de pertenencia}
+Un conjunto difuso $A$ sobre un universo $X$ se caracteriza por una función $\mu_A:X\to[0,1]$. Para un valor $x$, $\mu_A(x)$ expresa el grado con que $x$ pertenece al término. No es por sí mismo una probabilidad ni una frecuencia. En este modelo, por ejemplo, una humedad relativa puede pertenecer en grado 0,9 al término Media y en grado 0,1 al término Alta. Esto describe compatibilidad lingüística en la partición definida, no dos probabilidades mutuamente excluyentes.
+
+La distinción es relevante porque un sistema difuso representa gradualidad semántica. La suma de grados en una partición tipo Ruspini puede ser uno por construcción, pero esa igualdad no transforma los grados en probabilidades. El código prueba que los grados calculados están acotados y suman uno para la función de tres términos; la interpretación sigue siendo difusa.
+
+\subsection{Variable lingüística, universo y fuzzificación}
+Una variable lingüística vincula un nombre numérico con términos comprensibles. La variable de humedad relativa usa el universo numérico de diferencias respecto al MADP y los términos Baja, Media y Alta. La variable de tiempo usa días desde el último riego estándar terminado y los términos Reciente, Intermedio y Lejano. Fuzzificar consiste en evaluar las funciones de pertenencia de una observación y obtener sus grados.
+
+\subsection{Inferencia Mamdani}
+El esquema de inferencia empleado tiene cinco pasos:
+\begin{enumerate}
+  \item \textbf{Fuzzificación:} calcular los grados de cada entrada para sus tres términos.
+  \item \textbf{Activación:} para una regla con dos antecedentes, combinar grados mediante $\min$.
+  \item \textbf{Selección del consecuente:} el gen de la regla señala el conjunto de salida Baja, Media o Alta.
+  \item \textbf{Implicación y agregación:} truncar el conjunto de salida con $\min$ y unir contribuciones con $\max$.
+  \item \textbf{Defuzzificación:} obtener el centroide de la forma agregada.
+\end{enumerate}
+
+En el motor del proyecto la conjunción AND usa mínimo, la implicación también usa mínimo y la agregación usa máximo. Estas elecciones dan una operación determinista de lectura directa en el código. Otras configuraciones difusas podrían emplear operadores distintos; los resultados presentados corresponden exactamente a los operadores implementados.
+
+\subsection{Centroide discreto}
+El universo de salida $U=\{y_1,\ldots,y_m\}$ contiene 501 puntos equiespaciados desde cero hasta el máximo de TRAIN. Si $\mu_{\mathrm{agg}}(y_j)$ es la pertenencia agregada de la salida en el punto $y_j$, el centroide discreto es:
+\begin{equation}
+  \widehat V = \frac{\sum_{j=1}^{m} y_j\mu_{\mathrm{agg}}(y_j)}{\sum_{j=1}^{m}\mu_{\mathrm{agg}}(y_j)}.
+  \label{eq:centroide}
+\end{equation}
+Como la malla es uniforme, incluir el ancho común entre puntos multiplicaría numerador y denominador por el mismo factor y no alteraría el cociente. El código implementa las sumas vectorizadas. La salida ya está expresada en litros nominales, por lo que no se realiza una conversión posterior a clase o decisión.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.55cm and 0.65cm,>=Latex,
+  caja/.style={draw=azulUTA,rounded corners,fill=azulClaro,align=center,minimum width=2.5cm,minimum height=0.9cm,font=\small},
+  paso/.style={draw=verdeOscuro,rounded corners,fill=verdeClaro,align=center,minimum width=2.25cm,minimum height=0.9cm,font=\small}]
+\node[caja] (entradas) {Entradas numéricas\\06:00};
+\node[paso,right=of entradas] (fuzz) {Grados de\\pertenencia};
+\node[paso,right=of fuzz] (reglas) {Nueve reglas\\AND = mínimo};
+\node[paso,right=of reglas] (imp) {Implicación min\\agregación max};
+\node[caja,right=of imp] (salida) {Centroide\\litros nominales};
+\draw[->,thick,azulUTA] (entradas)--(fuzz);
+\draw[->,thick,azulUTA] (fuzz)--(reglas);
+\draw[->,thick,azulUTA] (reglas)--(imp);
+\draw[->,thick,azulUTA] (imp)--(salida);
+\end{tikzpicture}
+\caption{Cadena de inferencia Mamdani continua implementada.}\label{fig:cadena-mamdani}
+\end{figure}
+
+\subsection{Algoritmos genéticos}
+Un algoritmo genético mantiene una población de soluciones codificadas, evalúa su aptitud y genera descendencia con selección, cruce y mutación. La población permite examinar distintas configuraciones del espacio de búsqueda sin enumerarlas de forma sistemática. El elitismo conserva una solución destacada entre generaciones. Estos mecanismos son heurísticos: no prueban que se haya encontrado un óptimo global.
+
+En este problema cada candidato es una tabla de nueve consecuentes. La aptitud se obtiene ejecutando Mamdani en TRAIN y transformando su MAE mediante $F=1/(1+\MAE)$. No se evoluciona la topología de reglas, las variables de entrada ni los puntos de pertenencia. El cromosoma parametriza únicamente las conclusiones lingüísticas.
+
+\subsection{Regresión y métricas}
+Para objetivos $y_i$ y estimaciones $\widehat y_i$, las métricas son:
+\begin{align}
+  \MAE &= \frac{1}{n}\sum_{i=1}^{n}|y_i-\widehat y_i|,\\
+  \RMSE &= \sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i-\widehat y_i)^2},\\
+  \MedAE &= \operatorname{mediana}_{i=1}^{n}|y_i-\widehat y_i|.
+\end{align}
+MAE describe el promedio de magnitudes absolutas; RMSE da más peso relativo a errores grandes; MedAE resume la mediana de errores absolutos y es menos sensible a valores extremos. Las tres se expresan en litros. Ninguna convierte el error en rendimiento agronómico.
+
+\section{Fuente de datos y descripción del dominio}
+\subsection{Identificación y procedencia}
+Se utiliza la versión 1 del conjunto \emph{Soil Moisture, Irrigation Actuator and Weather Dataset from a Multi-Sector Precision-Irrigation}, depositado en Mendeley Data por Adamo, Colizzi, Dimauro, Guerriero y Lomonte. La referencia persistente empleada es DOI \href{https://doi.org/10.17632/c837v6p8ph.1}{10.17632/c837v6p8ph.1}. La versión 1 se publicó el 6 de septiembre de 2026 y se distribuye bajo licencia CC BY 4.0. El conjunto describe una finca instrumentada de Arnesano, provincia de Lecce, Italia, durante la temporada de febrero a septiembre de 2025 \cite{adamo2026}.
+
+La descripción oficial informa capas de datos sin procesar, procesados y código de preparación. Incluye telemetría de sensores de suelo y registros de válvulas, además de series por sector en una cuadrícula de diez minutos. La finca contiene cinco sectores con distintas configuraciones de cultivo y sustrato. Este proyecto usa las series procesadas \codigo{merged/dataset\_zone\_s.csv} y el archivo de eventos finales \codigo{irrigation\_events/final\_irrigation\_events.csv}; no integra las tablas meteorológicas a sus entradas.
+
+\begin{table}[H]
+\centering\small
+\caption{Capas empleadas y función que cumplen.}\label{tab:fuentes}
+\begin{tabularx}{\textwidth}{p{4cm}p{4cm}X}
+\toprule
+Fuente local & Unidad de contenido & Uso en el sistema\\
+\midrule
+\path{merged/dataset_zone_1.csv} a \path{dataset_zone_5.csv} & Series de humedad de suelo por sector, rejilla de diez minutos & Selección de la medición terminada disponible a las 06:00.\\
+\path{irrigation_events/final_irrigation_events.csv} & Eventos con sector, inicio, fin y tipo & Cálculo de días desde riego terminado y target de volumen nominal.\\
+\codigo{datos\_riego.csv} & Una fila por sector-día preparado & Entrada reproducible de la ejecución principal y fuente de la partición cronológica.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Eventos considerados}
+El archivo final de eventos contiene 789 registros en las categorías estándar y fertirrigación: 432 de tipo \codigo{standard\_irrigation} y 357 de tipo \codigo{fertigation}, según el recuento documentado de la fuente. El objetivo de cantidad incorpora exclusivamente la primera categoría. La exclusión de fertirrigación mantiene el alcance del target homogéneo respecto de los eventos de riego estándar definidos por el proyecto.
+
+Los eventos publicados incluyen registros reconstruidos a partir de señales operativas. Por esa razón, la etiqueta resultante hereda las decisiones de reconstrucción y validación de la fuente. La documentación del dataset indica que algunas detecciones inferidas emplearon umbrales agronómicos de humedad para validar plausibilidad. Como la humedad del suelo también interviene en el modelo, se reconoce una posible dependencia parcial entre el predictor y la etiqueta. No se cuantifica aquí cuánto afecta a cada caso.
+
+\subsection{Parámetros sectoriales}
+Los umbrales de agotamiento permisible por sector se fijan como \codigo{MADP\_POR\_SECTOR = \{1:40, 2:40, 3:60, 4:80, 5:70\}}. Los caudales nominales se definen como \codigo{CAUDAL\_POR\_SECTOR = \{1:1.1, 2:1.1, 3:1.1, 4:1.1, 5:0.4\}} L/min. El MADP se usa en el cálculo de la primera entrada; el caudal se utiliza para reconstruir la salida objetivo. No se incluye un valor sectorial como tercera entrada difusa.
+
+La lectura específica del sector 5 exige no confundir dos parámetros mencionados en el material del dataset: el MADP empleado por el modelo es 70, mientras que 50 aparece en criterios de plausibilidad usados para reconstruir determinados eventos. El caudal nominal de 0,4 L/min para ese sector también difiere de 1,1 L/min de los sectores 1 a 4.
+
+\begin{table}[H]
+\centering
+\caption{MADP y caudal nominal fijados para los cinco sectores.}\label{tab:sectores-base}
+\begin{tabular}{crr}
+\toprule
+Sector & MADP & Caudal nominal (L/min)\\
+\midrule
+1 & 40 & 1,1\\
+2 & 40 & 1,1\\
+3 & 60 & 1,1\\
+4 & 80 & 1,1\\
+5 & 70 & 0,4\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Alcance del conjunto observado}
+La evaluación se limita a una finca, cinco sectores y una temporada. Las series de sectores tienen distinta actividad de riego y distintos regímenes de volumen. Al compartir una sola base de nueve reglas, el modelo impone una superficie de inferencia común a todos los sectores, aunque el caudal sea distinto en la construcción del target. Esa simplificación del espacio de representación se debe tener en cuenta al interpretar errores y composición de la prueba.
+
+\section{Construcción de observaciones y objetivo}
+\subsection{Unidad de observación}
+La unidad analítica es un par sector-fecha. Para cada sector se genera una fecha de decisión diaria a las 06:00 desde la cobertura de la serie de sensores. Se usa una medición reciente ya terminada; se exige una antigüedad máxima de ocho horas. Se excluyen humedad fuera del intervalo 0--100 y valores faltantes. Si una válvula del sector permanece abierta a la hora de decisión, la fila no representa una nueva decisión y se descarta.
+
+\subsection{Alineamiento temporal de la celda de sensor}
+La columna \codigo{ts} marca el inicio de una celda de promedio de diez minutos. Si se usara directamente una celda cuyo intervalo todavía no hubiera concluido a las 06:00, se incorporarían datos no disponibles en el instante de decisión. Por ello se desplaza la marca diez minutos hacia adelante y se utiliza la observación completada más reciente que no supere las 06:00. Una unión temporal hacia atrás con tolerancia de ocho horas permite seleccionar esa medición y omitir días con huecos demasiado grandes.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.9cm,y=0.8cm,>=Latex]
+  \draw[->,thick] (0,0)--(13,0) node[right]{hora};
+  \foreach \x/\lab in {1/05:40,3/05:50,5/06:00,7/06:10,9/06:20,11/06:30}
+    {\draw (\x,0.10)--(\x,-0.10) node[below=4pt]{\small \lab};}
+  \draw[very thick,azulUTA] (1,0.8)--(3,0.8);
+  \draw[very thick,azulUTA] (3,0.8)--(5,0.8);
+  \draw[fill=azulClaro,draw=azulUTA] (1,0.55) rectangle (5,1.05);
+  \node[above=7pt] at (3,1.05) {celda de 05:40 a 06:00 terminada};
+  \draw[red,dashed,thick] (5,-0.2)--(5,1.55);
+  \node[above=1.6cm] at (5,0) {decisión 06:00};
+  \draw[gray,densely dashed] (5,0.55)--(7,0.55);
+  \draw[gray,densely dashed] (5,1.05)--(7,1.05);
+  \node[above=7pt,align=center] at (8,1.15) {la celda posterior\\todavía no está completa};
+\end{tikzpicture}
+\caption{Alineamiento conceptual de una celda de diez minutos con la hora de decisión.}\label{fig:alineamiento-sensor}
+\end{figure}
+
+\subsection{Variable de humedad relativa al MADP}
+Para el sector $s$, la humedad transformada se calcula como:
+\begin{equation}
+  H_{\mathrm{rel},s,d}=H_{s,d}-M_s,
+  \label{eq:humedad-rel}
+\end{equation}
+donde $H_{s,d}$ es la lectura del sensor y $M_s$ el MADP. Un valor negativo representa una lectura por debajo del valor de referencia; cero coincide con el MADP; un valor positivo lo supera. La diferencia conserva las unidades/escala de humedad del sensor y simplifica la descripción de la entrada alrededor de un punto de referencia sectorial.
+
+\subsection{Variable de días sin riego estándar}
+Para cada fecha se localiza el último final de evento estándar del mismo sector no posterior a la decisión. La diferencia entre ese final y la fecha actual se expresa en días y se acota por arriba a 30. Si no existe un evento estándar previo en el registro del sector, se asignan 30 días como valor máximo operacional. Esta variable resume recencia del último evento, pero no sustituye el estado del cultivo, el clima, la precipitación ni la dinámica del suelo.
+
+\subsection{Definición matemática del volumen objetivo}
+Sea $W_d=[t_d,t_d+24\,\mathrm{h})$ la ventana que comienza a las 06:00 del día $d$. Para un evento $e$ del sector $s$, con inicio $a_e$ y final $b_e$, la duración incluida es:
+\begin{equation}
+  \tau_{e,d}=\max\left(0,\frac{\min(t_d+24\,\mathrm{h},b_e)-\max(t_d,a_e)}{60\,\mathrm{s/min}}\right)\;\mathrm{min}.
+  \label{eq:solapamiento}
+\end{equation}
+En la implementación, la diferencia temporal se convierte a segundos y luego a minutos. Solo un evento del mismo sector y de tipo estándar con solapamiento estrictamente positivo incrementa el conteo. El volumen nominal se define como:
+\begin{equation}
+  V_{s,d}=q_s\sum_{e\in E_s^{\mathrm{est}}}\tau_{e,d},
+  \label{eq:target}
+\end{equation}
+donde $q_s$ es el caudal nominal en L/min y $E_s^{\mathrm{est}}$ es el conjunto de eventos estándar del sector.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.82cm,y=0.85cm,>=Latex]
+  \draw[->,thick] (0,0)--(14,0);
+  \draw[thick,azulUTA] (3,0.8)--(11,0.8);
+  \draw[thick,red] (1,0.25)--(5,0.25);
+  \draw[thick,verdeOscuro] (9,-0.25)--(13,-0.25);
+  \draw[dashed] (3,-0.6)--(3,1.2);
+  \draw[dashed] (11,-0.6)--(11,1.2);
+  \node[above] at (3,1.2) {06:00 inicio};
+  \node[above] at (11,1.2) {06:00 + 24 h};
+  \node[left] at (0,0.8) {ventana};
+  \node[left] at (0,0.25) {evento A};
+  \node[left] at (0,-0.25) {evento B};
+  \draw[very thick,orange] (3,0.25)--(5,0.25);
+  \draw[very thick,orange] (9,-0.25)--(11,-0.25);
+  \node[below=10pt,align=center] at (4,-0.65) {solo se cuenta\\el tramo solapado};
+  \node[below=10pt,align=center] at (10,-0.65) {el final posterior a\\la ventana se recorta};
+\end{tikzpicture}
+\caption{Intersección de eventos con la ventana objetivo semiabierta.}\label{fig:ventana}
+\end{figure}
+
+\subsection{Ejemplo manual del target}
+Considérese una observación a las 06:00 del sector 2. Dentro de las siguientes 24 horas hay un evento estándar que se extiende desde las 05:50 hasta las 06:20 y otro evento que dura 30 minutos completamente dentro de la ventana. El primer evento aporta solo 20 minutos; el segundo, 30. Con caudal nominal $q_2=1{,}1$ L/min:
+\begin{align*}
+  V &= (20\,\mathrm{min})(1{,}1\,\mathrm{L/min})+(30\,\mathrm{min})(1{,}1\,\mathrm{L/min})\\
+    &=22\,\mathrm{L}+33\,\mathrm{L}=55\,\mathrm{L}_{\mathrm{nom}}.
+\end{align*}
+Si el segundo evento fuera fertirrigación, sus 33 L nominales no se incluirían en el objetivo del proyecto. Si un evento termina exactamente a las 06:00 del día siguiente, el intervalo semiabierto no incorpora tiempo posterior a ese límite.
+
+\subsection{Volumen nominal frente a volumen medido}
+El objetivo se reconstruye mediante duraciones de eventos y caudales nominales documentados. Por consiguiente, el adjetivo \emph{nominal} es sustantivo: comunica que el target depende de una conversión basada en la configuración de caudal, no de la lectura de un contador independiente para cada observación. La salida del modelo estima ese target reconstruido. El informe no denomina el resultado volumen real aplicado ni lo valida como dosis óptima.
+
+\section{Diseño de las funciones de pertenencia}
+\subsection{Función común de tres grados}
+La función \codigo{tres\_grados(valores,bajo,centro,alto)} recibe tres puntos $b<c<a$. Calcula la rampa inferior y la superior con recorte al intervalo $[0,1]$ y define el grado intermedio como residuo:
+\begin{align}
+  \mu_B(x)&=\clip\!\left(\frac{c-x}{c-b},0,1\right),\\
+  \mu_A(x)&=\clip\!\left(\frac{x-c}{a-c},0,1\right),\\
+  \mu_M(x)&=1-\mu_B(x)-\mu_A(x).
+  \label{eq:funcion-tres}
+\end{align}
+La forma equivalente por tramos es:
+\begin{equation}
+\begin{array}{c|ccc}
+\text{Intervalo} & \mu_B(x)&\mu_M(x)&\mu_A(x)\\ \hline
+x\leq b &1&0&0\\
+b<x<c &\dfrac{c-x}{c-b}&\dfrac{x-b}{c-b}&0\\
+x=c &0&1&0\\
+c<x<a &0&\dfrac{a-x}{a-c}&\dfrac{x-c}{a-c}\\
+x\geq a&0&0&1
+\end{array}
+\label{eq:tabla-funcion}
+\end{equation}
+Por construcción, los grados son válidos y suman uno. Los extremos exteriores funcionan como hombros y el término central como una función triangular formada por dos segmentos lineales.
+
+\subsection{Conjuntos de entrada para humedad}
+Para $H_{\mathrm{rel}}$ se fijan $b=-20$, $c=0$ y $a=20$. Así, en $H_{\mathrm{rel}}=0$ la pertenencia a Media es 1. En $H_{\mathrm{rel}}=10$, los grados son $\mu_B=0$, $\mu_M=0{,}5$ y $\mu_A=0{,}5$. Valores por debajo de $-20$ pertenecen completamente a Baja y valores por encima de 20 completamente a Alta.
+
+\subsection{Conjuntos de entrada para días}
+Para $D_{\mathrm{sin\_riego}}$ los puntos son $b=0{,}5$, $c=1{,}5$ y $a=4{,}5$. En 0,8 días, Reciente tiene grado $(1{,}5-0{,}8)/(1{,}5-0{,}5)=0{,}7$; Intermedio tiene $0{,}3$ y Lejano 0. En 1,5 días el grado Intermedio es 1; en 3 días, Intermedio y Lejano son cada uno 0,5.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=0.83\textwidth,height=6.0cm,axis lines=left,xlabel={Humedad relativa al MADP},ylabel={Grado de pertenencia},xmin=-30,xmax=30,ymin=0,ymax=1.08,xtick={-20,0,20},ytick={0,0.5,1},grid=major,legend style={at={(0.5,-0.23)},anchor=north,legend columns=3}]
+\addplot[blue,thick] coordinates {(-30,1)(-20,1)(0,0)(20,0)(30,0)};\addlegendentry{Baja}
+\addplot[green!50!black,thick] coordinates {(-30,0)(-20,0)(0,1)(20,0)(30,0)};\addlegendentry{Media}
+\addplot[red,thick] coordinates {(-30,0)(-20,0)(0,0)(20,1)(30,1)};\addlegendentry{Alta}
+\end{axis}
+\end{tikzpicture}
+\caption{Partición difusa de la humedad relativa al MADP.}\label{fig:mf-humedad}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=0.83\textwidth,height=6.0cm,axis lines=left,xlabel={Días desde el último riego estándar terminado},ylabel={Grado de pertenencia},xmin=0,xmax=6,ymin=0,ymax=1.08,xtick={0.5,1.5,4.5},xticklabels={{0,5},{1,5},{4,5}},ytick={0,0.5,1},grid=major,legend style={at={(0.5,-0.23)},anchor=north,legend columns=3}]
+\addplot[blue,thick] coordinates {(0,1)(0.5,1)(1.5,0)(4.5,0)(6,0)};\addlegendentry{Reciente}
+\addplot[green!50!black,thick] coordinates {(0,0)(0.5,0)(1.5,1)(4.5,0)(6,0)};\addlegendentry{Intermedio}
+\addplot[red,thick] coordinates {(0,0)(0.5,0)(1.5,0)(4.5,1)(6,1)};\addlegendentry{Lejano}
+\end{axis}
+\end{tikzpicture}
+\caption{Partición difusa de la recencia del último riego.}\label{fig:mf-dias}
+\end{figure}
+
+\subsection{Conjuntos de salida en litros}
+La función de salida aplica la misma forma de tres grados al vector de litros positivos de TRAIN. Se calculan $Q_{25}=119{,}30$ L, $Q_{50}=233{,}75$ L y $Q_{75}=363{,}825$ L. Baja es un hombro izquierdo, Media une linealmente $Q_{25}$, $Q_{50}$ y $Q_{75}$ como triángulo, y Alta es un hombro derecho. La malla de universo es $U=\operatorname{linspace}(0,746{,}90,501)$ L. Al derivarse de TRAIN únicamente, esta transformación no consulta la distribución de TEST.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=0.83\textwidth,height=6.1cm,axis lines=left,xlabel={Volumen nominal (L)},ylabel={Grado de pertenencia},xmin=0,xmax=800,ymin=0,ymax=1.08,xtick={0,119.3,233.75,363.825,746.9},xticklabels={0,119,234,364,747},ytick={0,0.5,1},grid=major,legend style={at={(0.5,-0.23)},anchor=north,legend columns=3}]
+\addplot[blue,thick] coordinates {(0,1)(119.3,1)(233.75,0)(363.825,0)(746.9,0)};\addlegendentry{Baja}
+\addplot[green!50!black,thick] coordinates {(0,0)(119.3,0)(233.75,1)(363.825,0)(746.9,0)};\addlegendentry{Media}
+\addplot[red,thick] coordinates {(0,0)(119.3,0)(233.75,0)(363.825,1)(746.9,1)};\addlegendentry{Alta}
+\end{axis}
+\end{tikzpicture}
+\caption{Conjuntos de salida estimados solo con los cuantiles y máximo de TRAIN.}\label{fig:mf-salida}
+\end{figure}
+
+\section{Base de reglas e inferencia}
+\subsection{Matriz completa de reglas}
+El producto cartesiano de tres conjuntos de humedad y tres conjuntos temporales genera nueve antecedentes. Cada regla contiene un consecuente lingüístico que representa el conjunto difuso de litros de salida.
+
+\begin{table}[H]
+\centering\small
+\caption{Base manual y consecuentes hallados por el GA.}\label{tab:matriz-reglas}
+\begin{tabularx}{\textwidth}{c l l X c c}
+\toprule
+N.º & Humedad relativa & Días sin riego & Regla lingüística & Base & GA\\
+\midrule
+R1 & Baja & Reciente & SI Baja Y Reciente ENTONCES volumen & Media & Media\\
+R2 & Baja & Intermedio & SI Baja Y Intermedio ENTONCES volumen & Alta & Alta\\
+R3 & Baja & Lejano & SI Baja Y Lejano ENTONCES volumen & Alta & Baja\\
+R4 & Media & Reciente & SI Media Y Reciente ENTONCES volumen & Baja & Media\\
+R5 & Media & Intermedio & SI Media Y Intermedio ENTONCES volumen & Media & Baja\\
+R6 & Media & Lejano & SI Media Y Lejano ENTONCES volumen & Alta & Media\\
+R7 & Alta & Reciente & SI Alta Y Reciente ENTONCES volumen & Baja & Media\\
+R8 & Alta & Intermedio & SI Alta Y Intermedio ENTONCES volumen & Baja & Alta\\
+R9 & Alta & Lejano & SI Alta Y Lejano ENTONCES volumen & Media & Media\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+La tabla base responde a una interpretación inicial: una humedad relativa más baja y una mayor recencia temporal pueden asociarse a términos de mayor cantidad. Esta intuición se utiliza como referencia fija; no se adapta a TEST. El algoritmo genético entrega otra matriz manteniendo idénticos los antecedentes, conjuntos y operador de inferencia.
+
+\subsection{Orden de activaciones}
+La indexación sigue el orden humedad Baja, Media, Alta; dentro de cada grupo, días Reciente, Intermedio, Lejano. El índice de la regla para posiciones que empiezan en cero es $r=3h+d$. Así el cromosoma de base \codigo{122012001} se decodifica R1=1, R2=2, R3=2, R4=0, R5=1, R6=2, R7=0, R8=0, R9=1. El cromosoma final \codigo{120101121} se decodifica R1=1, R2=2, R3=0, R4=1, R5=0, R6=1, R7=1, R8=2, R9=1.
+
+\subsection{Inferencia paso a paso}
+Para la consulta $s=2$, humedad de suelo 42 y días desde último riego 0,8:
+\begin{enumerate}
+  \item MADP del sector 2 es 40; por tanto, humedad relativa $42-40=2$.
+  \item Aplicando puntos $(-20,0,20)$, se obtiene humedad (Baja,Media,Alta)=$(0,0{,}9,0{,}1)$.
+  \item Aplicando $(0{,}5,1{,}5,4{,}5)$, se obtiene tiempo (Reciente,Intermedio,Lejano)=$(0{,}7,0{,}3,0)$.
+  \item Se calcula el mínimo de cada pareja antecedente.
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\caption{Grados de entrada y activación de las nueve reglas para la consulta.}\label{tab:consulta-act}
+\begin{tabular}{cllrrcc}
+\toprule
+Regla & Término de humedad & Término de días & Grado H & Grado D & $\min$ & Interpretación\\
+\midrule
+R1 & Baja & Reciente & 0,0 & 0,7 & 0,0 & No activa\\
+R2 & Baja & Intermedio & 0,0 & 0,3 & 0,0 & No activa\\
+R3 & Baja & Lejano & 0,0 & 0,0 & 0,0 & No activa\\
+R4 & Media & Reciente & 0,9 & 0,7 & 0,7 & Activa\\
+R5 & Media & Intermedio & 0,9 & 0,3 & 0,3 & Activa\\
+R6 & Media & Lejano & 0,9 & 0,0 & 0,0 & No activa\\
+R7 & Alta & Reciente & 0,1 & 0,7 & 0,1 & Activa\\
+R8 & Alta & Intermedio & 0,1 & 0,3 & 0,1 & Activa\\
+R9 & Alta & Lejano & 0,1 & 0,0 & 0,0 & No activa\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+En Base, R4 concluye Baja con activación 0,7, R5 concluye Media con 0,3, R7 y R8 concluyen Baja con 0,1 cada una. El máximo por término resulta Baja=0,7, Media=0,3, Alta=0. En GA, R4 y R7 concluyen Media con grados 0,7 y 0,1, R5 concluye Baja con 0,3 y R8 concluye Alta con 0,1. El máximo por término es Baja=0,3, Media=0,7, Alta=0,1.
+
+\begin{table}[H]
+\centering
+\caption{Grados máximos que recortan cada conjunto de salida.}\label{tab:consulta-recortes}
+\begin{tabular}{lrrr}
+\toprule
+Conjunto de salida & Mamdani Base & Mamdani + GA & Reglas determinantes en GA\\
+\midrule
+Baja & 0,7 & 0,3 & R5\\
+Media & 0,3 & 0,7 & R4\\
+Alta & 0,0 & 0,1 & R8\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Cada conjunto de salida se trunca con el nivel indicado; se agregan los tres conjuntos por máximo y se calcula el centroide en 501 puntos. La ejecución observada da 137,99 L para Base y 266,37 L para GA. La diferencia refleja que el mismo antecedente activa salidas distintas bajo diferentes consecuentes; no es una decisión de apertura de válvula.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.55cm and 0.45cm,>=Latex,
+  bloque/.style={draw=azulUTA,rounded corners,fill=azulClaro,align=center,text width=2.45cm,minimum height=1cm,font=\small},
+  greenblock/.style={draw=verdeOscuro,rounded corners,fill=verdeClaro,align=center,text width=2.45cm,minimum height=1cm,font=\small}]
+\node[bloque] (crom) {Cromosoma\\9 consecuentes};
+\node[greenblock,right=of crom] (reg) {Motor Mamdani\\fijo};
+\node[greenblock,right=of reg] (pred) {Predicciones\\TRAIN};
+\node[bloque,right=of pred] (mae) {MAE en litros\\y fitness};
+\node[bloque,right=of mae] (evo) {Selección, cruce,\\mutación, elitismo};
+\draw[->,thick] (crom)--(reg);\draw[->,thick] (reg)--(pred);\draw[->,thick] (pred)--(mae);\draw[->,thick] (mae)--(evo);
+\draw[->,thick,bend left=28] (evo.north) to node[above,font=\scriptsize,align=center]{siguiente\\generación} (crom.north);
+\end{tikzpicture}
+\caption{Interacción entre codificación genética y motor de inferencia.}\label{fig:ga-mamdani}
+\end{figure}
+
+\section{Representación y optimización genética}
+\subsection{Cromosoma ternario}
+Cada regla necesita uno de tres términos de salida. El gen toma valores $g_r\in\{0,1,2\}$, con codificación 0=Baja, 1=Media y 2=Alta. Un individuo es el vector $\mathbf{g}=(g_1,\ldots,g_9)$. El orden coincide con la numeración R1--R9. El número de configuraciones posibles es:
+\begin{equation}
+  |\mathcal{G}|=3^9=19\,683.
+\end{equation}
+El cromosoma no contiene umbrales de entrada, puntos de pertenencia, caudales, clases observadas o genes binarios; solo nueve consecuencias lingüísticas.
+
+\begin{table}[H]
+\centering\small
+\caption{Decodificación gen por gen de la solución final.}\label{tab:decodificacion-ga}
+\begin{tabular}{crlll}
+\toprule
+Gen & Regla & Antecedente & Valor & Consecuente\\
+\midrule
+1 & R1 & Humedad Baja, días Reciente & 1 & Media\\
+2 & R2 & Humedad Baja, días Intermedio & 2 & Alta\\
+3 & R3 & Humedad Baja, días Lejano & 0 & Baja\\
+4 & R4 & Humedad Media, días Reciente & 1 & Media\\
+5 & R5 & Humedad Media, días Intermedio & 0 & Baja\\
+6 & R6 & Humedad Media, días Lejano & 1 & Media\\
+7 & R7 & Humedad Alta, días Reciente & 1 & Media\\
+8 & R8 & Humedad Alta, días Intermedio & 2 & Alta\\
+9 & R9 & Humedad Alta, días Lejano & 1 & Media\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Función objetivo y aptitud}
+Para cada cromosoma se simulan los 142 casos positivos de TRAIN con las activaciones precalculadas. La función objetivo es minimizar el MAE en litros:
+\begin{equation}
+  \MAE_{\mathrm{train}}(\mathbf{g})=\frac{1}{142}\sum_{i=1}^{142}|V_i-\widehat V_i(\mathbf{g})|.
+\end{equation}
+Para la selección por ruleta se convierte a aptitud positiva:
+\begin{equation}
+  F(\mathbf{g})=\frac{1}{1+\MAE_{\mathrm{train}}(\mathbf{g})}.
+  \label{eq:fitness}
+\end{equation}
+Cuando el MAE disminuye, el denominador disminuye y el fitness aumenta. La probabilidad de seleccionar un individuo es su fitness dividido para la suma de aptitudes de la población. El fitness es una transformación de error de entrenamiento; no es una exactitud ni una probabilidad de que la estimación sea correcta.
+
+La mejor solución reproducible obtiene MAE TRAIN de 145,112091 L y fitness 0,00684406057 aproximadamente. El uso de 1 en el denominador mantiene aptitud finita cuando el MAE llega a cero y positiva para todos los individuos. La escala numérica deriva de usar el error en litros como fue diseñado; no se normaliza respecto al rango objetivo.
+
+\subsection{Población inicial}
+La población consta de 30 vectores de nueve genes. Cada gen se inicializa aleatoriamente con uno de los valores 0, 1 o 2 mediante el generador de NumPy con semilla 42. La semilla fija la secuencia pseudoaleatoria en la configuración de ejecución; la reproducibilidad presupone mantener datos, código y dependencias equivalentes.
+
+\subsection{Selección por ruleta}
+Si los individuos tienen fitness $F_1,\ldots,F_N$, la probabilidad de seleccionar al individuo $i$ es:
+\begin{equation}
+  p_i=\frac{F_i}{\sum_{j=1}^{N}F_j}.
+\end{equation}
+La selección es estocástica. Un individuo con mejor MAE tiene más probabilidad de aportar genes, pero no necesariamente será elegido en cada muestreo. La ruleta se ejecuta dos veces para obtener los padres de un hijo.
+
+\subsection{Cruce de un punto}
+Se elige un punto entero entre 1 y 8, de modo que cada padre aporta al menos un gen y el hijo conserva longitud nueve. Si padres sintéticos fueran \codigo{012|210} y \codigo{222|001} y el corte estuviera tras el tercer gen, un hijo sería \codigo{012001}. En el proyecto se concatena el prefijo del primer padre con el sufijo del segundo. El ejemplo de seis posiciones solo ilustra la operación; los individuos reales tienen nueve.
+
+\subsection{Mutación ternaria}
+Para cada posición se obtiene un indicador aleatorio independiente y se compara con $p_m=0{,}08$. Si muta un gen con valor $g$, se suma aleatoriamente 1 o 2 módulo 3:
+\begin{equation}
+  g'=(g+u)\bmod 3,\qquad u\in\{1,2\}.
+\end{equation}
+Así la mutación siempre cambia el término y conserva el dominio ternario. Por ejemplo 0 puede cambiar a 1 o 2; no puede permanecer 0 en una mutación activada.
+
+\subsection{Elitismo, generaciones y retorno}
+El mejor cromosoma encontrado hasta el momento se copia a la nueva población sin alterarse. El bucle evalúa los estados 0 a 50: 51 registros en el historial y 50 transiciones evolutivas. En cada estado se calculan las aptitudes, se actualiza el mejor histórico y se almacenan generación, mejor fitness, MAE correspondiente y fitness promedio. Al finalizar se devuelve el mejor cromosoma observado y la tabla de historial.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.45cm,>=Latex,
+  caja/.style={draw=azulUTA,rounded corners,fill=azulClaro,align=center,text width=5.2cm,minimum height=0.8cm,font=\small}]
+\node[caja] (init) {Inicializar 30 cromosomas ternarios con semilla 42};
+\node[caja,below=of init] (eval) {Evaluar cada individuo sobre TRAIN: Mamdani, MAE y fitness};
+\node[caja,below=of eval] (best) {Guardar el mejor histórico y registrar generación};
+\node[caja,below=of best] (stop) {¿Se alcanzó la generación 50?};
+\node[caja,below=0.5cm of stop] (return) {Devolver el mejor cromosoma y el historial};
+\node[caja,right=2.2cm of stop] (next) {Copiar élite; seleccionar padres por ruleta; cruzar y mutar hijos};
+\draw[->,thick] (init)--(eval);\draw[->,thick] (eval)--(best);\draw[->,thick] (best)--(stop);
+\draw[->,thick] (stop)--node[right]{Sí}(return);
+\draw[->,thick] (stop.east)--node[above]{No}(next.west);
+\draw[->,thick] (next.north) |- ([xshift=1.1cm]eval.east) -- (eval.east);
+\end{tikzpicture}
+\caption{Flujo de una corrida del algoritmo genético.}\label{fig:flujo-ga}
+\end{figure}
+
+\subsection{Pseudocódigo reproducible}
+\begin{lstlisting}[caption={Esquema del algoritmo implementado},label={lst:pseudoga}]
+azar <- generador(seed=42)
+poblacion <- 30 cromosomas aleatorios de 9 genes en {0,1,2}
+mejor <- ninguno
+para generacion desde 0 hasta 50:
+    calcular prediccion Mamdani y MAE TRAIN para cada individuo
+    fitness <- 1 / (1 + MAE TRAIN)
+    actualizar mejor historico y guardar fila del historial
+    si generacion == 50: terminar ciclo
+    nueva <- [copia del mejor]                 # elitismo
+    mientras longitud(nueva) < 30:
+        padre1, padre2 <- muestreo por ruleta
+        corte <- entero entre 1 y 8
+        hijo <- padre1[:corte] + padre2[corte:]
+        mutar cada gen independientemente con probabilidad 0.08
+        agregar hijo a nueva
+    poblacion <- nueva
+devolver mejor y tabla del historial
+\end{lstlisting}
+
+\subsection{Costo y alcance de la búsqueda}
+Hay 30 individuos evaluados en cada uno de 51 estados generacionales, es decir, hasta 1.530 evaluaciones de fitness en la corrida descrita. Cada evaluación aplica el mismo motor a los 142 casos positivos de TRAIN. Este total describe evaluaciones, no soluciones necesariamente distintas, pues selección y elitismo pueden repetir cromosomas. El espacio contiene 19.683 asignaciones posibles; el GA realiza una búsqueda heurística sobre parte de ese espacio y no certifica óptimo global.
+
+\section{Partición cronológica y prevención de fuga}
+\subsection{Corte temporal}
+El corte se fija en el 28 de junio de 2025 a las 06:00. Las filas anteriores al día de purga se asignan a TRAIN; las filas desde el instante de corte, a TEST. Cuatro filas correspondientes al 27 de junio se excluyen. La secuencia es: primero dividir la cronología completa; después filtrar volumen positivo dentro de cada segmento. Esta secuencia mantiene ceros en la construcción de la frontera aunque no sean objetivos para la estimación condicional.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.95cm,y=0.9cm,>=Latex]
+  \draw[->,thick] (0,0)--(13,0);
+  \draw[fill=azulClaro,draw=azulUTA] (0,0.35) rectangle (6.9,1.15);
+  \draw[fill=naranjaClaro,draw=naranjaOscuro] (6.9,0.35) rectangle (7.7,1.15);
+  \draw[fill=verdeClaro,draw=verdeOscuro] (7.7,0.35) rectangle (12,1.15);
+  \node at (3.45,0.75) {TRAIN: 473 filas; 142 positivas};
+  \node[rotate=90] at (7.3,0.75) {4};
+  \node at (9.85,0.75) {TEST: 230 filas; 56 positivas};
+  \node[below,align=center] at (6.9,0) {26 jun.};
+  \node[below,align=center] at (7.3,0) {27 jun.\\purga};
+  \node[below,align=center] at (7.9,0) {28 jun.\\corte};
+  \node[below,align=center] at (11.3,0) {22 ago.};
+\end{tikzpicture}
+\caption{Esquema de separación temporal del conjunto Arnesano 2025.}\label{fig:split-cronologico}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Conteos de la evaluación temporal.}\label{tab:split-detalle}
+\begin{tabular}{lrrl}
+\toprule
+Partición & Filas sector-día & Positivas para cantidad & Cobertura temporal\\
+\midrule
+TRAIN & 473 & 142 & 12 febrero--26 junio 2025\\
+Purga & 4 & No se usan & 27 junio 2025\\
+TEST & 230 & 56 & 28 junio--22 agosto 2025\\
+Total cronológico & 707 & 198 entre TRAIN y TEST & Una temporada\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Justificación de la purga}
+El target de una decisión del 27 de junio examina eventos hasta las 06:00 del 28 de junio. Si esa observación se incorporara al ajuste, su etiqueta incluiría información temporal que alcanza la frontera del bloque de prueba. La purga elimina esas cuatro observaciones y separa los periodos asociados al horizonte de 24 horas. Este mecanismo protege esa frontera específica; no elimina toda dependencia temporal ni convierte una sola temporada en validación externa.
+
+\subsection{Información permitida en cada etapa}
+\begin{table}[H]
+\centering\small
+\caption{Uso de información según etapa.}\label{tab:uso-info}
+\begin{tabularx}{\textwidth}{p{3cm}X X}
+\toprule
+Etapa & Información utilizada & Información reservada\\
+\midrule
+Preparación & Señales de sensor anteriores a 06:00, historial previo y eventos futuros solo para construir la etiqueta histórica & Ningún dato de evento posterior se usa como entrada en la hora de decisión.\\
+Construcción de conjuntos de salida & Volúmenes positivos de TRAIN & Volúmenes TEST.\\
+Evaluación de cromosomas & Entradas y objetivos de TRAIN & Objetivos TEST.\\
+Comparadores constantes & Media y mediana de TRAIN & Estadísticos de TEST para fijar predicción.\\
+Evaluación final & Predicciones congeladas y objetivos positivos TEST para métricas & TEST no realimenta selección ni parametrización.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Alcance de la validación}
+La partición representa transferencia cronológica desde una etapa inicial a otra posterior de la misma finca y temporada. No es validación cruzada, no es validación entre años, no es una finca externa y no compara políticas operativas independientes. El lenguaje correcto es \emph{holdout temporal intra-temporada}. Las conclusiones se limitan a esta prueba.
+
+\section{Implementación del sistema}
+\subsection{Organización del código}
+La implementación principal está contenida en \codigo{riego\_simple/main.py}, que se lee de arriba abajo en ocho secciones numeradas. Esta organización mantiene visibles los parámetros y el recorrido central: configuración, preparación, división, funciones de pertenencia, inferencia, búsqueda, evaluación y programa principal. El archivo usa NumPy para operaciones vectorizadas, pandas para tablas y CSV, y la biblioteca estándar para argumentos y rutas.
+
+\begin{longtable}{p{4.3cm}p{1.6cm}p{4.5cm}p{4.1cm}}
+\caption{Mapa de funciones de la implementación principal.}\label{tab:mapa-codigo}\\
+\toprule
+Elemento & Líneas & Entrada principal & Salida/función\\
+\midrule
+\endfirsthead
+\toprule Elemento & Líneas & Entrada principal & Salida/función\\\midrule
+\endhead
+Configuración global & 16--39 & Rutas, MADP, caudales, regla base y parámetros & Define el experimento reproducible.\\
+\codigo{resumir\_riego\_ventana} & 45--60 & Eventos, inicio, sector & Conteo de eventos solapados y litros nominales.\\
+\codigo{preparar\_datos} & 62--123 & Series por sector y eventos fuente & CSV sector-día con variables, conteos y objetivo.\\
+\codigo{leer\_y\_dividir\_datos} & 128--157 & CSV sector-día validado & TRAIN, TEST y conteo de filas purgadas.\\
+\codigo{tres\_grados} & 162--169 & Valores y tres puntos $b,c,a$ & Columnas Baja, Media y Alta.\\
+\codigo{fuzzificar} & 171--177 & DataFrame de entradas & Grados de entradas y nueve activaciones.\\
+\codigo{preparar\_salida} & 179--189 & Litros positivos TRAIN & Malla, tres conjuntos de salida y cuantiles.\\
+\codigo{inferir\_mamdani} & 194--215 & Activaciones, cromosoma, malla & Litros defuzzificados por caso.\\
+\codigo{calcular\_mae} & 220--222 & Valores reales y predichos & Error absoluto medio.\\
+\codigo{calcular\_fitness} & 224--231 & Cromosoma e información TRAIN & Fitness inverso al MAE.\\
+\codigo{mutar} & 233--239 & Cromosoma y generador aleatorio & Copia con posibles cambios ternarios.\\
+\codigo{ejecutar\_ga} & 241--279 & Entradas/targets TRAIN y conjuntos & Mejor cromosoma e historial.\\
+\codigo{evaluar\_modelo} & 284--292 & Reales y estimados & MAE, RMSE y MedAE.\\
+\codigo{tabla\_reglas} & 294--307 & Cromosoma optimizado & DataFrame legible de nueve reglas.\\
+\codigo{consultar\_caso} & 309--338 & Sector, humedad, días y motor & Grados, reglas activas, Base y GA.\\
+\codigo{ejecutar} y CLI & 343--459 & Argumentos de terminal & Pipeline, CSV, resumen y consulta.\\
+\bottomrule
+\end{longtable}
+
+\subsection{Validaciones incorporadas}
+La carga valida columnas necesarias, datos faltantes, orden temporal de medición frente a decisión, sectores conocidos, volúmenes no negativos y consistencia entre conteo de eventos y positividad del volumen. La división valida que las particiones no estén vacías y que haya un día purgado. El constructor de salida exige cantidades positivas y cuantiles estrictamente crecientes. La inferencia exige nueve genes ternarios. La consulta comprueba que el sector exista, la humedad esté entre 0 y 100, los días sean no negativos y se entreguen juntos los tres parámetros.
+
+\subsection{Archivos producidos}
+La ejecución normal crea o actualiza cinco CSV bajo \codigo{riego\_simple/resultados/}:
+\begin{enumerate}
+  \item \codigo{reglas.csv}: nombres de antecedente y consecuente de Base y GA.
+  \item \codigo{historial\_ga.csv}: generación, mejor fitness, MAE del mejor histórico y fitness promedio.
+  \item \codigo{predicciones.csv}: fechas y sectores positivos de TEST, objetivo nominal y predicciones de Base, GA, mediana y media TRAIN.
+  \item \codigo{metricas.csv}: MAE, RMSE y MedAE de los cuatro modelos comparados.
+  \item \codigo{metricas\_por\_sector.csv}: casos por sector, promedio del objetivo y MAE de Base y GA.
+\end{enumerate}
+Cada archivo responde a una pregunta distinta y permite inspeccionar predicciones más allá del resumen de consola.
+
+\section{Protocolo experimental}
+\subsection{Modelos comparados}
+\begin{enumerate}
+  \item \textbf{Mamdani Base:} nueve consecuentes definidos en la tabla \ref{tab:matriz-reglas}; motor Mamdani común.
+  \item \textbf{Mamdani + GA:} consecuentes del mejor cromosoma de la corrida con semilla 42; mismo motor y malla.
+  \item \textbf{Mediana TRAIN:} predicción constante igual a la mediana de los 142 objetivos positivos de TRAIN.
+  \item \textbf{Media TRAIN:} predicción constante igual a la media de los objetivos positivos de TRAIN.
+\end{enumerate}
+Las referencias constantes son importantes porque comparan el beneficio de reglas de dos entradas con una predicción que no utiliza entradas. Se calculan únicamente desde TRAIN, igual que el resto de parámetros de ajuste.
+
+\subsection{Métricas y lectura comparativa}
+Se calculan las tres métricas sobre el mismo conjunto de 56 objetivos positivos de TEST. Menor valor indica menor error bajo la métrica correspondiente. MAE es la métrica optimizada indirectamente por el GA; RMSE y MedAE son evaluaciones complementarias que muestran sensibilidad a extremos y error mediano.
+
+\subsection{Procedimiento de reproducción}
+La ejecución normal utiliza \codigo{riego\_simple/datos\_riego.csv}. La reconstrucción opcional del CSV requiere las tablas procesadas Arnesano de \path{datasets/arnesano_2025/02_processed_data/}. El orden operativo es reconstruir si se necesita, ejecutar pipeline, ejecutar consulta y correr tests.
+
+\begin{lstlisting}[language=bash,caption={Comandos de reproducción desde la raíz del repositorio}]
+python -m pip install -r riego_simple/requirements.txt
+python riego_simple/main.py --preparar
+python riego_simple/main.py
+python riego_simple/main.py --sector 2 --humedad 42 --dias 0.8
+python -m pytest -q
+\end{lstlisting}
+
+\section{Resultados descriptivos del objetivo}
+\subsection{Distribución por periodo}
+Los objetivos positivos de TRAIN tienen mínimo 7,20 L, Q25 119,30 L, mediana 233,75 L, Q75 363,825 L, media 258,41 L y máximo 746,90 L. En TEST, los correspondientes valores son 6,00 L, 21,725 L, 31,90 L, 99,275 L, 102,50 L y 545,60 L. La mediana de TEST es 201,85 L inferior a la de TRAIN. Los cambios de distribución se reportan después de aplicar el corte congelado; no determinan una modificación posterior del protocolo.
+
+\begin{table}[H]
+\centering\small
+\caption{Resumen estadístico de volúmenes positivos nominales.}\label{tab:dist-target}
+\begin{tabular}{lrrrrrrr}
+\toprule
+Periodo & $n$ & Mínimo & $Q_{25}$ & Mediana & $Q_{75}$ & Media & Máximo\\
+\midrule
+TRAIN & 142 & 7,20 & 119,30 & 233,75 & 363,825 & 258,41 & 746,90\\
+TEST & 56 & 6,00 & 21,725 & 31,90 & 99,275 & 102,50 & 545,60\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Distribución sectorial}
+\begin{table}[H]
+\centering\small
+\caption{Cantidad y resumen del objetivo por sector y partición.}\label{tab:dist-sector}
+\begin{tabular}{rrrrrrr}
+\toprule
+Sector & $n$ TRAIN & Mediana TRAIN & Media TRAIN & $n$ TEST & Mediana TEST & Media TEST\\
+\midrule
+1 & 29 & 147,40 & 180,78 & 4 & 51,15 & 83,05\\
+2 & 44 & 302,50 & 298,48 & 2 & 102,85 & 102,85\\
+3 & 5 & 183,70 & 218,24 & 0 & -- & --\\
+4 & 46 & 320,10 & 349,92 & 40 & 38,50 & 127,52\\
+5 & 18 & 22,60 & 62,87 & 10 & 7,80 & 10,12\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+En TEST, el sector 4 aporta 40 de 56 casos positivos, equivalente a 71,43\%. El sector 3 no tiene positivos para una evaluación condicional. Los sectores 1 y 2 se evalúan con cuatro y dos ejemplos, respectivamente; sus MAE por sector son por ello sensibles a casos individuales. Los volúmenes bajos del sector 5 son coherentes con una escala de caudal nominal diferente, pero los datos de esta evaluación no bastan para atribuir causalidad a un único factor.
+
+\section{Resultados de estimación}
+\subsection{Métricas agregadas de TEST}
+\begin{table}[H]
+\centering
+\caption{Errores en el bloque TEST de 56 filas positivas, en litros nominales.}\label{tab:metricas-test}
+\begin{tabular}{lrrr}
+\toprule
+Modelo & MAE (L) & RMSE (L) & MedAE (L)\\
+\midrule
+Mamdani Base & 277,478 & 301,865 & 301,693\\
+Mamdani + GA & 241,445 & 258,689 & 254,572\\
+Mediana TRAIN & \textbf{188,984} & \textbf{197,855} & \textbf{207,350}\\
+Media TRAIN & 206,420 & 215,009 & 230,913\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Mamdani + GA reduce el MAE de Base en $277{,}478-241{,}445=36{,}033$ L, una reducción relativa de aproximadamente 13,0\% respecto a Base. Sin embargo, el MAE de GA supera en 52,461 L al de la mediana TRAIN. La referencia de mediana también presenta menor RMSE y menor MedAE que GA. Por tanto, el ordenamiento no respalda que la complejidad del sistema difuso produzca una predicción más precisa que la mediana constante en esta prueba.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[ybar,bar width=13pt,width=0.86\textwidth,height=7cm,ymin=0,ymax=330,ylabel={MAE TEST (L)},symbolic x coords={Mamdani Base,Mamdani + GA,Mediana TRAIN,Media TRAIN},xtick=data,x tick label style={rotate=15,anchor=east,font=\small},nodes near coords,nodes near coords align={vertical},grid=major,grid style={gray!20},enlarge x limits=0.18]
+\addplot[fill=azulUTA!70] coordinates {(Mamdani Base,277.478)(Mamdani + GA,241.445)(Mediana TRAIN,188.984)(Media TRAIN,206.420)};
+\end{axis}
+\end{tikzpicture}
+\caption{Comparación visual de MAE en TEST. Menor barra representa menor error.}\label{fig:mae}
+\end{figure}
+
+\subsection{Desglose por sector}
+\begin{table}[H]
+\centering
+\caption{Errores y volumen objetivo medio por sector en TEST.}\label{tab:mae-sector}
+\begin{tabular}{rrrrr}
+\toprule
+Sector & Casos TEST & Volumen objetivo medio (L) & MAE Base (L) & MAE GA (L)\\
+\midrule
+1 & 4 & 83,05 & 310,32 & 205,30\\
+2 & 2 & 102,85 & 149,35 & 136,11\\
+3 & 0 & -- & -- & --\\
+4 & 40 & 127,52 & 253,99 & 231,65\\
+5 & 10 & 10,12 & 383,93 & 316,13\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+El GA mejora la base manual en MAE para cada sector con casos, aunque la magnitud del error permanece alta en varios de ellos. El sector 5 muestra MAE GA de 316,13 L frente a promedio objetivo de 10,12 L; esta disparidad evidencia que el sistema común no representa bien esa escala en los casos de prueba. Para el sector 3 no se define MAE porque no hay observaciones positivas. No se convierte ese vacío en cero.
+
+\subsection{Interpretación conjunta}
+La mejora de GA sobre Base indica que la búsqueda encontró una combinación de consecuentes con menor error de entrenamiento y una mejora agregada sobre Base en este bloque. La mediana TRAIN, no obstante, funciona mejor en todas las métricas presentadas. Esta comparación es central: evaluar un algoritmo implica contrastarlo contra referencias transparentes, no solo contra una versión inicial del mismo modelo.
+
+\section{Consulta manual y salida del programa}
+La consulta de terminal:
+\begin{center}
+\codigo{python riego\_simple/main.py --sector 2 --humedad 42 --dias 0.8}
+\end{center}
+ejecuta primero la evaluación estándar y luego presenta la consulta. El ejemplo informa MADP=40, humedad relativa=2, grados (0, 0,9, 0,1) para humedad y (0,7, 0,3, 0) para días. Presenta R4, R5, R7 y R8 como reglas con activación positiva. La base manual devuelve 137,99 L y el cromosoma genético 266,37 L. La impresión explicita que la salida es condicional y que no determina el inicio del riego.
+
+\subsection{Qué significa una salida de consulta}
+Una cifra del CLI puede parecer una recomendación si se lee fuera de contexto. La semántica implementada es más limitada: es una estimación del objetivo nominal reconstruido si en la historia de referencia se observa riego estándar en esa ventana. El usuario proporciona sector, humedad y días, pero no hay argumento que solicite decidir entre regar y no regar; tampoco existe salida categórica de acción.
+
+\section{Pruebas de software y verificación}
+\subsection{Suite unitaria}
+La suite de \codigo{riego\_simple/test\_main.py} contiene 13 pruebas que verifican comportamientos centrales:
+\begin{enumerate}
+  \item grados acotados y partición de tres términos;
+  \item correspondencia de nueve reglas y consecuentes ternarios;
+  \item centroide Mamdani continuo mediante un caso sintético pequeño;
+  \item suma de solapamientos y exclusión de fertirrigación;
+  \item corte y purga antes del filtrado de positivos;
+  \item parámetros MADP y caudal distinto del sector 5;
+  \item cuantiles y conjuntos de salida formados solo con TRAIN;
+  \item mutación que cambia cada gen activado a un valor distinto válido;
+  \item reproducibilidad del GA y preservación/mejora de fitness;
+  \item evidencia de que GA y conjuntos reciben solo datos de TRAIN;
+  \item cálculo esperado de fitness y métricas de regresión;
+  \item consulta manual con grados y volúmenes numéricos;
+  \item reconstrucción determinista de CSV cuando está presente el dataset procesado.
+\end{enumerate}
+\subsection{Validación de la preparación}
+El modo \codigo{--preparar} vuelve a construir 707 observaciones a partir de las cinco tablas sectoriales procesadas y el archivo final de eventos. La verificación de este modo es relevante porque confirma que la preparación no depende de las capas raw ni del código externo de transformación: consume los archivos procesados requeridos. La salida tabular conserva el mismo tamaño esperado y el pipeline posterior reproduce los conteos y resultados documentados.
+
+\subsection{Resultado de verificación}
+En el entorno de ejecución del proyecto, \codigo{python -m pytest -q} obtiene 13 pruebas aprobadas. La ejecución principal termina con 707 filas cronológicas, TRAIN=473, purga=4, TEST=230; positivos TRAIN=142 y positivos TEST=56. La consulta manual reproduce el ejemplo descrito. También se verifica el flujo de preparación con los datos procesados disponibles.
+
+\begin{table}[H]
+\centering
+\caption{Comprobaciones reproducibles del flujo final.}\label{tab:verificacion}
+\begin{tabularx}{\textwidth}{p{5cm}p{3cm}X}
+\toprule
+Comando / verificación & Resultado & Evidencia relevante\\
+\midrule
+\codigo{python -m pytest -q} & 13 aprobadas & Aritmética, partición, GA, centroide, consulta y preparación.\\
+\codigo{python riego\_simple/main.py --preparar} & 707 filas generadas & Conteos, cromosoma, métricas y sectores reproducidos.\\
+\codigo{python riego\_simple/main.py} & Finaliza correctamente & Métricas de TEST y cinco CSV escritos.\\
+Consulta sector 2 / humedad 42 / días 0,8 & 137,99 L Base; 266,37 L GA & Grados de pertenencia y reglas activadas trazables.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Validez, limitaciones y amenazas a la interpretación}
+\subsection{Validez del constructo}
+El constructo de salida es volumen nominal estimado asociado a duración reconstruida por caudal nominal. No es una medición directa de agua aplicada ni una dosis definida mediante requerimientos agronómicos. La entrada temporal describe recencia de evento y la humedad se expresa relativa al MADP, pero las variables no contienen todas las condiciones que determinan la operación del riego. En consecuencia, el sistema representa el objetivo operacional definido, no la necesidad fisiológica completa del cultivo.
+
+\subsection{Validez interna y dependencia de fuente}
+Los eventos se derivan de telemetría y procedimientos de reconstrucción del conjunto. La duración puede contener incertidumbre de registro. Además, la descripción de la fuente reporta que algunos eventos inferidos se revisaron con humedad como criterio de plausibilidad. Dado que humedad del suelo forma parte de una entrada del modelo, existe una posibilidad de dependencia entre predictores y target. El informe la identifica como riesgo de interpretación, pero no estima una corrección causal.
+
+\subsection{Validez temporal}
+La partición es cronológica y la purga protege el horizonte de etiqueta en el borde del corte. Sin embargo, TRAIN y TEST pertenecen a una misma temporada y pueden compartir condiciones comunes de finca, infraestructura, cultivo y política. No hay bloque de otro año ni finca externa. Una diferencia de desempeño entre las dos particiones no debe convertirse en una afirmación general sobre estabilidad temporal.
+
+\subsection{Desbalance de composición entre sectores}
+Los sectores contribuyen de forma desigual a TEST y tienen diferentes caudales nominales, MADP y escalas de volumen. La salida no incluye identidad del sector ni caudal como variable de entrada; se ajusta una base común. Por eso el MAE global puede estar dominado por el sector 4, que aporta 40 casos. A su vez, las métricas de sectores 1 y 2 son estimaciones muy inestables por sus tamaños de 4 y 2. El sector 3 no se evalúa con positivos.
+
+\subsection{Validez estadística y tamaño de prueba}
+56 casos positivos permiten calcular errores descriptivos para el bloque observado, pero no constituyen por sí solos una base para inferencia estadística fuerte. No se presentan intervalos de confianza ni pruebas de significación. La diferencia reportada entre métodos es una diferencia de métricas puntuales. El MAE de una referencia puede cambiar ante modificaciones en la composición del periodo o ante casos extremos.
+
+\subsection{Validez externa y despliegue}
+Los resultados no demuestran transporte a otras temporadas, fincas, tipos de cultivo, equipos, sectores o políticas operativas. Tampoco se valida una estrategia de riego en campo. Un despliegue requeriría observaciones independientes de volumen, control de calidad de eventos, protocolo prospectivo, validación agronómica, análisis de seguridad y una decisión externa de ocurrencia. El programa actual sirve para estimación condicional de un target histórico nominal dentro del alcance definido.
+
+\begin{table}[H]
+\centering\small
+\caption{Amenazas y salvaguardas aplicadas.}\label{tab:amenazas}
+\begin{tabularx}{\textwidth}{p{3.5cm}p{5cm}X}
+\toprule
+Amenaza & Posible efecto & Tratamiento en este trabajo\\
+\midrule
+Leakage por futuro en sensores & Entrada no disponible en decisión & Se desplaza marca de celda y se usa medición ya terminada antes de 06:00.\\
+Etiqueta que cruza frontera & TRAIN podría incluir parte del horizonte TEST & Se purgan cuatro observaciones del 27 de junio.\\
+Estadísticos de TEST en ajuste & Optimismo de evaluación & Cuantiles de salida, GA y baselines se calculan con TRAIN.\\
+Heterogeneidad entre sectores & Error agregado enmascara escalas & Se presentan conteos, promedios y MAE por sector.\\
+Target nominal reconstructivo & Distancia a litros medidos & Se conserva la denominación nominal y se explicita la fuente de caudal.\\
+Pocos casos por sector & Estimación sectorial inestable & Se informan tamaños junto con métricas y se deja vacío el sector sin datos.\\
+Una finca/temporada & Transferibilidad no evaluada & Se limita explícitamente la conclusión al holdout observado.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Discusión}
+\subsection{¿Qué significa mejorar la base manual?}
+La reducción de MAE de 36,03 L muestra que el cromosoma optimizado cambia la salida del motor de forma útil respecto de la asignación manual bajo esta evaluación. No demuestra que el GA sea superior a cualquier alternativa ni que haya aprendido un patrón causal. La comparación válida incluye los baselines y el alcance de los datos.
+
+\subsection{¿Por qué la mediana puede ganar?}
+La predicción constante mediana se adapta a un bloque de prueba con volumen positivo mucho menor que el periodo inicial. Como no usa variables, no puede responder a las entradas caso a caso, pero su centro se acerca mejor a la ubicación general de TEST bajo MAE. El modelo difuso busca relaciones de dos entradas y una tabla común; si las cantidades cambian por sector, operación o periodo de una forma que esas entradas no recogen, su flexibilidad no garantiza ventaja.
+
+\subsection{Distribución como contexto, no como excusa}
+El desplazamiento de mediana (233,75 L a 31,90 L) y el peso de sector 4 describen el conjunto de evaluación. Son factores de contexto que pueden ayudar a interpretar por qué una única tabla de nueve reglas tiene dificultad para estimar cantidades. No se usan para descartar TEST ni para elegir un corte más favorable. Que la composición difiera no anula el resultado; delimita qué pregunta responde: rendimiento del sistema en el bloque cronológico concreto.
+
+\subsection{Aporte académico}
+El aporte metodológico del proyecto es integrar una representación de reglas difusas explicable, salida de regresión por centroide y búsqueda genética de consecuentes, todo con una partición temporal explícita. El resultado menos favorable frente a una referencia sencilla también forma parte de la evidencia: permite discutir evaluación comparativa, selección sin leakage, semántica de las etiquetas y alcance de generalización.
+
+\section{Conclusiones}
+\begin{enumerate}
+  \item Se implementó una cadena de estimación condicional con observación sector-día a las 06:00, dos entradas, nueve reglas y salida continua en litros nominales.
+  \item El target suma la duración que solapa la ventana de 24 horas por el caudal nominal del sector, incorporando solo eventos estándar y excluyendo fertirrigación.
+  \item Las funciones de salida se definen con cuantiles positivos de TRAIN. El motor Mamdani usa AND mínimo, implicación mínima, agregación máxima y centroide discreto.
+  \item El cromosoma ternario representa los nueve consecuentes. Con selección por ruleta, cruce de un punto, mutación ternaria, semilla 42 y elitismo, la solución reproducible es \codigo{120101121}.
+  \item La partición temporal contiene 473 TRAIN, cuatro observaciones purgadas y 230 TEST; la evaluación condicional usa 142 y 56 positivos, respectivamente.
+  \item GA reduce el MAE frente a Base de 277,48 a 241,44 L, pero la mediana TRAIN obtiene 188,98 L y supera ambos métodos difusos en el bloque de prueba.
+  \item La distribución cambia sustancialmente entre periodos y la composición de TEST está concentrada en sector 4. Las métricas sectoriales hacen visibles estas diferencias, incluido el sector 3 sin positivos.
+  \item La evidencia sustenta una implementación reproducible de inferencia difusa y optimización genética. No sustenta una decisión de riego, una dosis agronómica óptima ni generalización interanual o externa.
+\end{enumerate}
+
+\section{Recomendaciones de trabajo futuro}
+Las siguientes líneas requerirían nuevos datos y protocolos, no están incluidas en la estimación actual:
+\begin{enumerate}
+  \item Validar el objetivo frente a medidores independientes de caudal o volumen por evento y registrar incertidumbre de duración.
+  \item Añadir temporadas o fincas solo si es posible definir particiones externas por grupo y mantener una prueba realmente independiente.
+  \item Estudiar una representación sectorial que incorpore caudal y permita variación por cultivo sin perder interpretabilidad.
+  \item Incorporar clima, lluvia o estado de cultivo únicamente si están disponibles en el instante de decisión y se evalúan con control estricto de fuga.
+  \item Separar explícitamente la tarea de ocurrencia (si habrá evento) de la tarea de cantidad (volumen condicionado), con métricas adecuadas para cada una.
+  \item Evaluar incertidumbre, intervalos de predicción y robustez ante diferentes semillas genéticas.
+  \item Realizar evaluación prospectiva con supervisión agronómica antes de considerar cualquier integración operacional.
+\end{enumerate}
+
+\section*{Referencias}
+\addcontentsline{toc}{section}{Referencias}
+\begin{thebibliography}{9}
+\bibitem{zadeh1965} Zadeh, L. A. (1965). Fuzzy sets. \emph{Information and Control}, 8(3), 338--353. DOI: \href{https://doi.org/10.1016/S0019-9958(65)90241-X}{10.1016/S0019-9958(65)90241-X}.
+\bibitem{mamdani1975} Mamdani, E. H., \& Assilian, S. (1975). An experiment in linguistic synthesis with a fuzzy logic controller. \emph{International Journal of Man-Machine Studies}, 7(1), 1--13. DOI: \href{https://doi.org/10.1016/S0020-7373(75)80002-2}{10.1016/S0020-7373(75)80002-2}.
+\bibitem{goldberg1989} Goldberg, D. E. (1989). \emph{Genetic Algorithms in Search, Optimization, and Machine Learning}. Addison-Wesley.
+\bibitem{adamo2026} Adamo, T., Colizzi, L., Dimauro, G., Guerriero, E., \& Lomonte, N. (2026). \emph{Soil Moisture, Irrigation Actuator and Weather Dataset from a Multi-Sector Precision-Irrigation} (Version 1). Mendeley Data. DOI: \href{https://doi.org/10.17632/c837v6p8ph.1}{10.17632/c837v6p8ph.1}. Licencia CC BY 4.0.
+\end{thebibliography}
+
+\appendix
+\section{Notación y parámetros completos}
+\begin{longtable}{p{3.2cm}p{4.5cm}p{6.8cm}}
+\caption{Símbolos, constantes y valores de ejecución.}\label{tab:parametros}\\
+\toprule
+Símbolo / nombre & Valor & Interpretación\\
+\midrule
+\endfirsthead
+\toprule Símbolo / nombre & Valor & Interpretación\\\midrule
+\endhead
+$t_0$ & 06:00 & Instante de decisión y comienzo de ventana.\\
+$W$ & $[t_0,t_0+24\,h)$ & Horizonte de la etiqueta.\\
+$M_s$ & 40, 40, 60, 80, 70 & MADP de sectores 1 a 5.\\
+$q_s$ & 1,1; 1,1; 1,1; 1,1; 0,4 L/min & Caudales nominales de sectores 1 a 5.\\
+Puntos de humedad & $(-20,0,20)$ & Parámetros bajo, centro y alto.\\
+Puntos de días & $(0,5;1,5;4,5)$ & Parámetros bajo, centro y alto.\\
+Puntos de salida & $(119,30;233,75;363,825)$ L & Cuantiles Q25, Q50 y Q75 de TRAIN.\\
+Universo de salida & 0--746,90 L, 501 puntos & Malla para implicación, agregación y centroide.\\
+Cromosoma base & 122012001 & Nueve consecuentes manuales.\\
+Cromosoma GA & 120101121 & Mejor individuo de la corrida reportada.\\
+Población & 30 & Número de individuos por generación.\\
+Generaciones & 50 & Número de transiciones evolutivas.\\
+Mutación & 0,08 & Probabilidad independiente por gen.\\
+Semilla & 42 & Inicializa el generador pseudoaleatorio.\\
+Corte & 2025-06-28 06:00 & Primer instante que pertenece a TEST.\\
+Filas cronológicas & 707 & TRAIN 473, purga 4, TEST 230.\\
+Filas positivas & 198 & TRAIN 142 y TEST 56.\\
+\bottomrule
+\end{longtable}
+
+\section{Ejemplo numérico de la función de pertenencia}
+Para la consulta sector 2, humedad observada 42 y MADP 40, se obtiene $x_H=2$. Como $0<x_H<20$:
+\begin{align*}
+  \mu_{\mathrm{Baja}}(2)&=0,\\
+  \mu_{\mathrm{Alta}}(2)&=(2-0)/(20-0)=0,1,\\
+  \mu_{\mathrm{Media}}(2)&=1-0-0,1=0,9.
+\end{align*}
+Para días $x_D=0,8$, con $0,5<x_D<1,5$:
+\begin{align*}
+  \mu_{\mathrm{Reciente}}(0,8)&=(1,5-0,8)/(1,5-0,5)=0,7,\\
+  \mu_{\mathrm{Lejano}}(0,8)&=0,\\
+  \mu_{\mathrm{Intermedio}}(0,8)&=1-0,7=0,3.
+\end{align*}
+El orden de columnas que devuelve el código es Baja/Media/Alta para humedad y Reciente/Intermedio/Lejano para días.
+
+\section{Ejemplo de métricas y fitness}
+Considérese una serie sintética de objetivos $[10,20,40]$ L y predicciones $[12,15,50]$ L. Los errores absolutos son $[2,5,10]$ L y los errores firmados tienen cuadrados $[4,25,100]$:
+\begin{align*}
+  \MAE &= (2+5+10)/3=5,667\,\mathrm{L},\\
+  \RMSE &= \sqrt{(4+25+100)/3}=6,557\,\mathrm{L},\\
+  \MedAE &= \operatorname{mediana}(2,5,10)=5\,\mathrm{L}.
+\end{align*}
+El fitness del ejemplo es $1/(1+5,667)=0,15$ aproximadamente. Este cálculo pequeño explica la transformación; no corresponde a las métricas reportadas de la ejecución.
+
+\section{Inventario de artefactos de resultados}
+\begin{longtable}{p{4.2cm}p{3.7cm}p{6.5cm}}
+\caption{Contenido y lectura recomendada de los CSV producidos.}\label{tab:artefactos}\\
+\toprule Archivo & Unidad de fila & Uso\\
+\midrule
+\endfirsthead
+\toprule Archivo & Unidad de fila & Uso\\\midrule
+\endhead
+\codigo{reglas.csv} & Regla & Revisar términos lingüísticos y comparación Base/GA.\\
+\codigo{historial\_ga.csv} & Estado generacional & Inspeccionar progreso de aptitud y error TRAIN del mejor individuo.\\
+\codigo{predicciones.csv} & Positivo TEST & Comparar objetivo nominal con cada estimación por fecha y sector.\\
+\codigo{metricas.csv} & Modelo & Comparar MAE, RMSE y MedAE agregados.\\
+\path{metricas_por_sector.csv} & Sector & Ver tamaños, promedio objetivo y errores por sector.\\
+\bottomrule
+\end{longtable}
+
+\section{Correspondencia entre etapas y evidencia}
+\begin{longtable}{p{3cm}p{5cm}p{6.5cm}}
+\caption{Trazabilidad entre diseño, implementación y evidencia generada.}\label{tab:trazabilidad}\\
+\toprule Etapa & Implementación & Evidencia para revisión\\
+\midrule
+\endfirsthead
+\toprule Etapa & Implementación & Evidencia para revisión\\\midrule
+\endhead
+Definir caudal y MADP & Constantes al inicio de \codigo{main.py} & Tabla \ref{tab:sectores-base}; diccionario de datos.\\
+Preparar objetivo & \codigo{resumir\_riego\_ventana} & Test de solapamiento y \codigo{datos\_riego.csv}.\\
+Proteger temporalidad & \codigo{leer\_y\_dividir\_datos} & Conteos 473/4/230.\\
+Fuzzificar & \codigo{tres\_grados} y \codigo{fuzzificar} & Grados de consulta y pruebas de partición.\\
+Definir salida & \codigo{preparar\_salida} & Q25, Q50, Q75 y universo de TRAIN.\\
+Inferir & \codigo{inferir\_mamdani} & Centroide y estimación de consulta.\\
+Optimizar & \codigo{ejecutar\_ga} & Cromosoma, MAE TRAIN e historial.\\
+Evaluar & \codigo{evaluar\_modelo} y \codigo{ejecutar} & Métricas globales y sectoriales.\\
+\bottomrule
+\end{longtable}
+
+\section{Glosario}
+\begin{description}[style=nextline,leftmargin=3.3cm]
+  \item[Agregación] Unión de conclusiones difusas activadas; aquí se usa máximo.
+  \item[Algoritmo genético] Método de búsqueda poblacional con selección, cruce, mutación y supervivencia elitista.
+  \item[Centroide] Cociente entre suma ponderada de salida y suma de pertenencias agregadas.
+  \item[Consecuente] Término de salida indicado por la parte ENTONCES de una regla.
+  \item[Defuzzificación] Conversión de una forma difusa agregada a una cantidad nítida.
+  \item[Fitness] Aptitud usada por selección genética; en este proyecto es $1/(1+\MAE_{train})$.
+  \item[Fuzzificación] Evaluación de los grados de pertenencia de una entrada numérica.
+  \item[Grado de pertenencia] Nivel de compatibilidad de un valor con un conjunto difuso; no es probabilidad.
+  \item[Holdout temporal] Bloque cronológico reservado para evaluación posterior al periodo usado para ajustar.
+  \item[MADP] Umbral de agotamiento permisible sectorial utilizado como referencia en la entrada de humedad.
+  \item[MAE] Media de errores absolutos, en la unidad del objetivo.
+  \item[MedAE] Mediana de errores absolutos.
+  \item[RMSE] Raíz de la media de errores al cuadrado.
+  \item[Regla Mamdani] Relación difusa de antecedentes y un consecuente lingüístico.
+  \item[Target] Valor objetivo que el procedimiento de evaluación compara contra la estimación.
+  \item[Volumen nominal] Estimación basada en minutos de evento y caudal nominal, no en medidor independiente.
+\end{description}
+
+\section{Preguntas de auditoría reproducible}
+\begin{enumerate}
+  \item \textbf{¿El programa decide cuándo regar?} No; produce cantidad condicional y no modela la ocurrencia del evento.
+  \item \textbf{¿El objetivo son litros observados en un contador?} No; es duración reconstruida por caudal nominal documentado.
+  \item \textbf{¿Qué parte del cromosoma cambia?} Solo los consecuentes de R1--R9.
+  \item \textbf{¿Se emplean objetivos TEST para crear los conjuntos de salida?} No; se pasan únicamente objetivos positivos TRAIN.
+  \item \textbf{¿Por qué se purga el 27 de junio?} Porque el horizonte de 24 horas alcanza la frontera temporal.
+  \item \textbf{¿Qué referencia tiene menor MAE TEST?} La mediana calculada en TRAIN, con 188,98 L.
+  \item \textbf{¿El resultado se puede extrapolar a otras temporadas?} No se evaluó esa transferencia.
+  \item \textbf{¿Qué representa 0,7 en una entrada difusa?} Un grado de pertenencia al conjunto lingüístico, no una probabilidad.
+\end{enumerate}
+
+\section*{Declaración de alcance}
+\addcontentsline{toc}{section}{Declaración de alcance}
+Los resultados, tablas y ejemplos de este documento describen exclusivamente el sistema y los archivos de datos identificados en la fecha de elaboración. La salida se interpreta como una estimación condicional del volumen nominal reconstruido de eventos de riego estándar. El documento no constituye una recomendación agronómica, una instrucción de operación de válvulas ni una declaración de volumen medido.
+
+\end{document}

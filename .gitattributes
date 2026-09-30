@@ -1,0 +1,10 @@
+*.pdf binary
+*.png binary
+*.rar filter=lfs diff=lfs merge=lfs -text
+datasets/DataSet-Soil[[:space:]]Moisture,[[:space:]]Irrigation[[:space:]]Actuator[[:space:]]and[[:space:]]Weather/01_raw_data/raw_irrigation_actuators/*.csv filter=lfs diff=lfs merge=lfs -text
+datasets/DataSet-Soil[[:space:]]Moisture filter=lfs diff=lfs merge=lfs -text
+Irrigation[[:space:]]Actuator[[:space:]]and[[:space:]]Weather/01_raw_data/raw_irrigation_actuators/*.csv filter=lfs diff=lfs merge=lfs -text
+datasets/DataSet-Soil[[:space:]]Moisture,[[:space:]]Irrigation[[:space:]]Actuator[[:space:]]and[[:space:]]Weather/01_raw_data/raw_irrigation_actuators/raw_actuators.csv filter=lfs diff=lfs merge=lfs -text
+datasets/DataSet-Soil[[:space:]]Moisture,[[:space:]]Irrigation[[:space:]]Actuator[[:space:]]and[[:space:]]Weather/01_raw_data/raw_irrigation_actuators/raw_measurements.csv filter=lfs diff=lfs merge=lfs -text
+Irrigation[[:space:]]Actuator[[:space:]]and[[:space:]]Weather/01_raw_data/raw_irrigation_actuators/raw_actuators.csv filter=lfs diff=lfs merge=lfs -text
+Irrigation[[:space:]]Actuator[[:space:]]and[[:space:]]Weather/01_raw_data/raw_irrigation_actuators/raw_measurements.csv filter=lfs diff=lfs merge=lfs -text
