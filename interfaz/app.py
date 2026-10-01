@@ -310,7 +310,7 @@ def bloque_consulta(qs: dict[str, list[str]], reglas_ga: np.ndarray) -> str:
     reales = positivos["litros_nominales_riego_24h"].to_numpy(float)
 
     # `universo` es la malla de litros; `conjuntos` son Bajo/Medio/Alto de salida.
-    universo, conjuntos, _ = proyecto.preparar_salida(reales)
+    universo, conjuntos, cuantiles_salida = proyecto.preparar_salida(reales)
 
     # Aqui ocurre la consulta Mamdani real. No se calcula a mano en la interfaz:
     # se reutiliza la funcion defendida en el codigo principal del proyecto.
@@ -337,21 +337,52 @@ def bloque_consulta(qs: dict[str, list[str]], reglas_ga: np.ndarray) -> str:
         f"{proyecto.ETIQUETAS_DIAS[i]}={caso['grados_dias'][i]:.3f}" for i in range(3)
     )
     # Convierte la lista de reglas que activó Mamdani en una tabla para el panel.
-    reglas = pd.DataFrame(caso["reglas_activadas"])
-    if len(reglas):
-        # Escribe la operación mínima para que se pueda comprobar cada regla.
-        reglas["calculo_fuerza"] = reglas.apply(
-            lambda fila: f"min({fila['grado_humedad']:.3f}, {fila['grado_dias']:.3f}) = {fila['grado']:.3f}",
-            axis=1,
-        )
-        reglas = reglas.rename(columns={
-            "regla": "Regla", "humedad": "Humedad", "grado_humedad": "Grado humedad",
-            "dias": "Días", "grado_dias": "Grado días", "calculo_fuerza": "Fuerza (mínimo)",
-            "base": "Consecuente Base", "ga": "Consecuente GA",
+    # Detalla las nueve combinaciones, incluso las que tienen fuerza cero.
+    filas_reglas = []
+    for indice, fuerza in enumerate(activaciones[0]):
+        indice_h, indice_d = indice // 3, indice % 3
+        filas_reglas.append({
+            "Regla": f"R{indice + 1}",
+            "Cálculo de fuerza": (
+                f"min({proyecto.ETIQUETAS_HUMEDAD[indice_h]}={caso['grados_humedad'][indice_h]:.3f}, "
+                f"{proyecto.ETIQUETAS_DIAS[indice_d]}={caso['grados_dias'][indice_d]:.3f}) "
+                f"= {fuerza:.3f}"
+            ),
+            "Consecuente Base": proyecto.ETIQUETAS_SALIDA[proyecto.REGLAS_BASE[indice]],
+            "Consecuente GA": proyecto.ETIQUETAS_SALIDA[reglas_ga[indice]],
         })
-        reglas_html = tabla(reglas, 9)
-    else:
-        reglas_html = "<p>Sin reglas activadas.</p>"
+    reglas_html = tabla(pd.DataFrame(filas_reglas), 9)
+
+    # Escribe la sustitución numérica usada en las seis funciones de entrada.
+    def filas_pertenencia(etiquetas, grados, valor, puntos):
+        bajo, centro, alto = puntos
+        grado_bajo = float(grados[0])
+        grado_alto = float(grados[2])
+        return [
+            {
+                "Conjunto": etiquetas[0],
+                "Sustitución": f"clip(({centro:g} - {valor:g}) / ({centro:g} - ({bajo:g})), 0, 1) = {grado_bajo:.3f}",
+                "Grado": grado_bajo,
+            },
+            {
+                "Conjunto": etiquetas[1],
+                "Sustitución": f"1 - {grado_bajo:.3f} - {grado_alto:.3f} = {float(grados[1]):.3f}",
+                "Grado": float(grados[1]),
+            },
+            {
+                "Conjunto": etiquetas[2],
+                "Sustitución": f"clip(({valor:g} - {centro:g}) / ({alto:g} - {centro:g}), 0, 1) = {grado_alto:.3f}",
+                "Grado": grado_alto,
+            },
+        ]
+
+    calculos_entrada = pd.DataFrame(
+        filas_pertenencia(proyecto.ETIQUETAS_HUMEDAD, caso["grados_humedad"],
+                          caso["humedad_relativa"], (-20, 0, 20))
+        + filas_pertenencia(proyecto.ETIQUETAS_DIAS, caso["grados_dias"], dias,
+                            (0.5, 1.5, 4.5))
+    )
+    entradas_html = tabla(calculos_entrada, 6)
 
     # Muestra la fuerza máxima que llega a cada conjunto de salida en cada método.
     fuerzas_salida = pd.DataFrame({
@@ -359,7 +390,29 @@ def bloque_consulta(qs: dict[str, list[str]], reglas_ga: np.ndarray) -> str:
         "Fuerza Base": detalle_base["grados_salida"][0],
         "Fuerza GA": detalle_ga["grados_salida"][0],
     })
+    # Explica qué fuerzas de reglas entran en cada operación máximo.
+    for termino, etiqueta in enumerate(proyecto.ETIQUETAS_SALIDA):
+        calculos = []
+        for nombre, cromosoma, detalle in (
+            ("Base", proyecto.REGLAS_BASE, detalle_base),
+            ("GA", reglas_ga, detalle_ga),
+        ):
+            partes = [
+                f"R{regla + 1}={activaciones[0, regla]:.3f}"
+                for regla in range(9) if cromosoma[regla] == termino
+            ]
+            calculos.append(
+                f"max({', '.join(partes)}) = {detalle['grados_salida'][0, termino]:.3f}"
+            )
+        fuerzas_salida.loc[termino, "Cálculo Base"] = calculos[0]
+        fuerzas_salida.loc[termino, "Cálculo GA"] = calculos[1]
     fuerzas_html = tabla(fuerzas_salida, 3)
+
+    # Presenta los puntos que definen Baja/Media/Alta y se aprendieron con TRAIN.
+    calibracion_html = tabla(pd.DataFrame({
+        "Cuantil de TRAIN": ["Q25: Baja", "Q50: Media", "Q75: Alta"],
+        "Litros": cuantiles_salida,
+    }), 3)
 
     # Presenta numerador y denominador reales de la fórmula discreta del centroide.
     centroide_html = "".join([
@@ -368,6 +421,18 @@ def bloque_consulta(qs: dict[str, list[str]], reglas_ga: np.ndarray) -> str:
         f"<p><b>Mamdani + GA:</b> {detalle_ga['numerador'][0]:,.3f} / "
         f"{detalle_ga['denominador'][0]:,.3f} = {detalle_ga['litros'][0]:.2f} L</p>",
     ])
+    # Abre una tabla plegable con cada uno de los 501 términos de las sumas.
+    puntos_centroide = pd.DataFrame({
+        "Litros": universo,
+        "Grado agregado Base": detalle_base["curva_agregada"][0],
+        "Litros x grado Base": universo * detalle_base["curva_agregada"][0],
+        "Grado agregado GA": detalle_ga["curva_agregada"][0],
+        "Litros x grado GA": universo * detalle_ga["curva_agregada"][0],
+    })
+    puntos_centroide_html = puntos_centroide.to_html(
+        index=False, classes="tabla", border=0, escape=True,
+        float_format=lambda valor: f"{valor:.9f}",
+    )
     grafico_salida = grafico_salida_agregada_svg(
         universo, detalle_base["curva_agregada"][0], detalle_ga["curva_agregada"][0],
         float(detalle_base["litros"][0]), float(detalle_ga["litros"][0]),
@@ -409,14 +474,24 @@ def bloque_consulta(qs: dict[str, list[str]], reglas_ga: np.ndarray) -> str:
       <div class="scroll">{reglas_html}</div>
       <details class="pasos-calculo">
         <summary>Ver el cálculo completo de Base y GA</summary>
-        <p>La fuerza de cada regla es el mínimo entre el grado de humedad y el grado de días. Las reglas con la misma conclusión se agrupan tomando su fuerza máxima.</p>
+        <h4>1. Conversión de entradas a grados</h4>
+        <p>Humedad relativa: {humedad:g} - {caso['madp']:g} = {caso['humedad_relativa']:g}. Días sin riego: {dias:g}.</p>
+        <div class="scroll">{entradas_html}</div>
+        <h4>2. Fuerza de cada regla: mínimo entre ambos grados</h4>
+        <div class="scroll">{reglas_html}</div>
         <h4>Fuerza que recibe cada conjunto de salida</h4>
         <div class="scroll">{fuerzas_html}</div>
-        <h4>Curvas de salida combinadas y centroides</h4>
+        <h4>3. Conjuntos de salida calibrados con TRAIN</h4>
+        <div class="scroll">{calibracion_html}</div>
+        <p>Para cada punto L de la malla: Baja recortada = min(αBaja, μBaja(L)); Media recortada = min(αMedia, μMedia(L)); Alta recortada = min(αAlta, μAlta(L)); μ agregada(L) = max(Baja recortada, Media recortada, Alta recortada).</p>
+        <h4>4. Curvas agregadas y centroides</h4>
         {grafico_salida}
-        <h4>Cálculo final del centroide</h4>
-        <p>Se multiplica cada litro de la malla por su grado en la curva agregada y se suman esos productos. Luego se divide para la suma de los grados. El resultado es un volumen nominal estimado, no una medición real.</p>
+        <h4>5. Numerador / denominador = centroide</h4>
+        <p>Centroide = Σ(L × μ agregada(L)) / Σ(μ agregada(L)); se evalúan los 501 puntos de la malla. Los productos y grados de cada punto están abajo.</p>
         {centroide_html}
+        <details class="puntos-detalle"><summary>Mostrar los 501 términos numéricos de las sumas</summary>
+          <div class="scroll">{puntos_centroide_html}</div>
+        </details>
       </details>
     </div>
     """
@@ -507,6 +582,8 @@ form button { background:var(--brand); color:white; font-weight:700; cursor:poin
 .pasos-calculo summary { color:var(--brand); font-weight:700; cursor:pointer; }
 .pasos-calculo h4 { margin:18px 0 8px; }
 .pasos-calculo p { line-height:1.5; }
+.puntos-detalle { margin-top:12px; }
+.puntos-detalle .scroll { max-height:65vh; }
 .salida-agregada { overflow:auto; border:1px solid var(--line); border-radius:8px; padding:8px; background:#fbfdff; }
 .salida-agregada svg { display:block; min-width:620px; width:100%; }
 .salida-agregada p { margin:4px 0; color:var(--muted); font-size:13px; }
