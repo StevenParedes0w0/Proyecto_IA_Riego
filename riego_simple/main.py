@@ -1,7 +1,6 @@
 """Estima volumen nominal de riego con Mamdani y un algoritmo genético.
 
 Ejecutar desde la raíz: python riego_simple/main.py
-Este archivo se lee de arriba hacia abajo para facilitar su defensa oral.
 """
 
 from __future__ import annotations
@@ -53,35 +52,34 @@ SEMILLA = 42
 # 2. PREPARACIÓN DE DATOS
 # ============================================================
 def resumir_riego_ventana(eventos: pd.DataFrame, inicio: pd.Timestamp, sector: int) -> tuple[int, float]:
-    """Cuenta y estima litros de eventos estándar solapados con las próximas 24 h.
+    """Revisa los eventos y suma los litros nominales de las próximas 24 horas.
 
-    Recorre las filas de eventos, conserva solo los del tipo y sector solicitados,
-    recorta cada evento a los límites de la ventana, mide los minutos que quedan
-    y multiplica esos minutos por el caudal nominal fijo del sector.
-    Devuelve (número de eventos que aportan tiempo, litros nominales estimados).
+    Recibe la tabla de eventos, la fecha y hora desde donde empieza el periodo,
+    y el número de sector que se quiere revisar. Devuelve dos resultados:
+    cuántos riegos estándar encontró y cuántos litros nominales suman.
     """
-    # La ventana usa 24 horas exactas a partir de la hora de decisión.
+    # Define el periodo que vamos a revisar: desde el inicio hasta el día siguiente.
     fin_ventana = inicio + pd.Timedelta(days=1)
     cantidad_eventos = 0
     litros = 0.0
-    # itertuples recorre cada fila como un objeto ligero con atributos por columna.
+    # Revisa uno por uno los eventos registrados.
     for evento in eventos.itertuples(index=False):
-        # Fertirrigación y eventos de otros sectores no forman parte del objetivo.
+        # Ignora la fertirrigación y los eventos que pertenecen a otro sector.
         if evento.type != "standard_irrigation" or evento.sector != sector:
             continue
-        # max toma el inicio más tardío y min el final más temprano: esto obtiene
-        # la intersección entre el evento y la ventana [inicio, fin_ventana).
+        # Si el evento empieza antes del periodo, usa el inicio del periodo.
         inicio_solapado = max(inicio, evento.start)
+        # Si termina después del periodo, cuenta solo hasta el final del periodo.
         fin_solapado = min(fin_ventana, evento.end)
-        # La resta produce una duración; total_seconds la convierte a segundos;
-        # dividir para 60 la expresa en minutos. max evita duraciones negativas.
+        # Calcula cuánto duró la parte del riego dentro del periodo, en minutos.
+        # Si las fechas no se cruzan, deja la duración en cero y no la cuenta.
         minutos = max(0.0, (fin_solapado - inicio_solapado).total_seconds() / 60)
         if minutos > 0:
-            # Un evento cuenta solo si tiene solapamiento de duración positiva.
+            # Cuenta el evento solo si tuvo una duración mayor que cero en el periodo.
             cantidad_eventos += 1
-            # Suma la reconstrucción nominal; no es una lectura de caudalímetro.
+            # Convierte minutos a litros nominales usando el caudal del sector.
             litros += minutos * CAUDAL_POR_SECTOR[sector]
-    # Retorna ambos resúmenes calculados durante el recorrido de eventos.
+    # Devuelve cuántos eventos se contaron y cuántos litros nominales suman.
     return cantidad_eventos, litros
 
 
