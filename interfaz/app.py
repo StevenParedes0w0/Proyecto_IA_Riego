@@ -63,6 +63,12 @@ GRAFICAS = [
 # Lectura segura de CSV de resultados.
 # ---------------------------------------------------------------------------
 def leer_csv(nombre: str, **kwargs) -> pd.DataFrame:
+    """Lee un CSV de resultados y avisa cómo generarlo si aún no existe.
+
+    Recibe el nombre del archivo y opciones que `pandas.read_csv` pueda usar.
+    Devuelve sus filas y columnas como una tabla de pandas.
+    """
+    # Los resultados siempre se buscan en la carpeta conocida del proyecto.
     ruta = RESULTADOS_DIR / nombre
     if not ruta.exists():
         raise FileNotFoundError(f"Falta {ruta}. Ejecute python riego_simple/main.py")
@@ -74,7 +80,14 @@ def leer_csv(nombre: str, **kwargs) -> pd.DataFrame:
 # las tablas sean legibles en pantalla.
 # ---------------------------------------------------------------------------
 def tabla(df: pd.DataFrame, filas: int = 12) -> str:
+    """Convierte las primeras filas de una tabla en HTML seguro y legible.
+
+    Redondea solo los números decimales para que ocupen menos espacio.
+    El resultado es una cadena HTML que luego se inserta en la página.
+    """
+    # Se copia para dar formato sin modificar la tabla original.
     vista = df.head(filas).copy()
+    # Se muestran tres decimales; los valores ausentes quedan como celdas vacías.
     for col in vista.select_dtypes(include=["float", "float64", "float32"]).columns:
         vista[col] = vista[col].map(lambda x: "" if pd.isna(x) else f"{x:.3f}")
     return vista.to_html(index=False, classes="tabla", border=0, escape=True)
@@ -84,6 +97,12 @@ def tabla(df: pd.DataFrame, filas: int = 12) -> str:
 # Lee `reglas.csv` y reconstruye el cromosoma GA: Baja=0, Media=1, Alta=2.
 # ---------------------------------------------------------------------------
 def cromosoma_ga(reglas: pd.DataFrame) -> np.ndarray:
+    """Traduce las etiquetas de las reglas a los números usados por el GA.
+
+    Baja corresponde a 0, Media a 1 y Alta a 2. Devuelve los nueve
+    consecuentes como un arreglo de enteros en el orden del archivo de reglas.
+    """
+    # `map` reemplaza cada palabra por el número que representa esa etiqueta.
     return reglas["consecuente_ga"].map({"Baja": 0, "Media": 1, "Alta": 2}).to_numpy(int)
 
 
@@ -91,7 +110,14 @@ def cromosoma_ga(reglas: pd.DataFrame) -> np.ndarray:
 # Resumen del split temporal. Primero se separa todo, luego se cuentan positivos.
 # ---------------------------------------------------------------------------
 def resumen_split() -> dict[str, int]:
+    """Cuenta observaciones de TRAIN, purga, TEST y riegos de cada periodo.
+
+    La división se obtiene del código principal, para que el panel use el
+    mismo corte cronológico. Devuelve los conteos que aparecen en las tarjetas.
+    """
+    # El motor aplica aquí la separación cronológica y devuelve la purga como número.
     train, test, purga = proyecto.leer_y_dividir_datos()
+    # Un caso positivo es una observación cuyo volumen nominal objetivo es mayor que cero.
     train_pos = train[train["litros_nominales_riego_24h"] > 0]
     test_pos = test[test["litros_nominales_riego_24h"] > 0]
     return {
@@ -108,6 +134,7 @@ def resumen_split() -> dict[str, int]:
 # Tarjeta simple para el resumen.
 # ---------------------------------------------------------------------------
 def card(titulo: str, valor: str | int | float) -> str:
+    """Construye una tarjeta HTML y escapa el texto para mostrarlo como dato."""
     return f"<div class='card'><span>{html.escape(titulo)}</span><b>{html.escape(str(valor))}</b></div>"
 
 
@@ -122,22 +149,32 @@ def grafico_pertenencia_svg(
     etiquetas: tuple[str, str, str],
     marcadores: list[tuple[float, str]],
 ) -> str:
+    """Dibuja tres funciones de pertenencia y marca los valores consultados.
+
+    Recibe los puntos del eje horizontal, las tres curvas, sus nombres y los
+    valores que deben señalarse. Devuelve un pequeño gráfico SVG como texto.
+    """
+    # El área del dibujo deja márgenes para los ejes y las etiquetas.
     ancho, alto = 300, 125
     izq, der, sup, inf = 26, 10, 14, 22
     xmin, xmax = float(xs.min()), float(xs.max())
     colores = ("#24527a", "#2d7d58", "#b34a4a")
 
     def px(x: float) -> float:
+        # Convierte un valor de entrada a su posición horizontal en el SVG.
         return izq + (x - xmin) / (xmax - xmin) * (ancho - izq - der)
 
     def py(y: float) -> float:
+        # Convierte un grado entre 0 y 1 a la posición vertical del SVG.
         return sup + (1 - y) * (alto - sup - inf)
 
+    # Cada curva se dibuja uniendo los puntos consecutivos con una línea.
     paths = []
     for i, etiqueta in enumerate(etiquetas):
         puntos = " ".join(f"{px(float(x)):.1f},{py(float(y)):.1f}" for x, y in zip(xs, curvas[:, i]))
         paths.append(f"<polyline points='{puntos}' fill='none' stroke='{colores[i]}' stroke-width='2'/>")
 
+    # Las líneas punteadas muestran dónde cae el dato que se está consultando.
     lineas = []
     for valor, etiqueta in marcadores:
         valor = max(xmin, min(xmax, float(valor)))
@@ -148,6 +185,7 @@ def grafico_pertenencia_svg(
             f"<text x='{min(x+4, ancho-58):.1f}' y='{sup+10}' font-size='9' fill='#111827'>{html.escape(etiqueta)}</text>"
         )
 
+    # La leyenda conserva los mismos colores que las tres curvas.
     leyenda = "".join(
         f"<span><i style='background:{colores[i]}'></i>{html.escape(etiquetas[i])}</span>"
         for i in range(3)
@@ -168,6 +206,67 @@ def grafico_pertenencia_svg(
     """
 
 
+def grafico_salida_agregada_svg(
+    universo: np.ndarray,
+    curva_base: np.ndarray,
+    curva_ga: np.ndarray,
+    litros_base: float,
+    litros_ga: float,
+) -> str:
+    """Dibuja las dos curvas agregadas y señala dónde cae cada centroide."""
+    ancho, alto = 760, 230
+    izquierda, derecha, arriba, abajo = 48, 18, 18, 34
+    minimo, maximo = float(universo.min()), float(universo.max())
+
+    def x_svg(litros: float) -> float:
+        return izquierda + (litros - minimo) / (maximo - minimo) * (ancho - izquierda - derecha)
+
+    def y_svg(grado: float) -> float:
+        return arriba + (1 - grado) * (alto - arriba - abajo)
+
+    def puntos_svg(curva: np.ndarray) -> str:
+        return " ".join(
+            f"{x_svg(float(x)):.1f},{y_svg(float(y)):.1f}"
+            for x, y in zip(universo, curva)
+        )
+
+    puntos_base = puntos_svg(curva_base)
+    puntos_ga = puntos_svg(curva_ga)
+    # El relleno deja ver qué forma agregada se usa para calcular cada centroide.
+    relleno_base = f"{izquierda},{y_svg(0)} {puntos_base} {ancho-derecha},{y_svg(0)}"
+    relleno_ga = f"{izquierda},{y_svg(0)} {puntos_ga} {ancho-derecha},{y_svg(0)}"
+    marcas = []
+    for litros, etiqueta, color in (
+        (litros_base, "Base", "#24527a"), (litros_ga, "GA", "#d97706"),
+    ):
+        x = x_svg(litros)
+        marcas.append(
+            f"<line x1='{x:.1f}' y1='{arriba}' x2='{x:.1f}' y2='{alto-abajo}' "
+            f"stroke='{color}' stroke-dasharray='5 4' stroke-width='2'/>"
+            f"<text x='{min(x+5, ancho-65):.1f}' y='{arriba+13}' fill='{color}' font-size='12'>"
+            f"{etiqueta}: {litros:.2f} L</text>"
+        )
+    return f"""
+    <div class="salida-agregada">
+      <svg viewBox="0 0 {ancho} {alto}" role="img" aria-label="Curvas agregadas de Base y GA con sus centroides">
+        <line x1="{izquierda}" y1="{alto-abajo}" x2="{ancho-derecha}" y2="{alto-abajo}" stroke="#64748b"/>
+        <line x1="{izquierda}" y1="{arriba}" x2="{izquierda}" y2="{alto-abajo}" stroke="#64748b"/>
+        <text x="8" y="{arriba+4}" font-size="11" fill="#64748b">1</text>
+        <text x="8" y="{alto-abajo}" font-size="11" fill="#64748b">0</text>
+        <polygon points="{relleno_base}" fill="#24527a" fill-opacity=".12"/>
+        <polygon points="{relleno_ga}" fill="#d97706" fill-opacity=".16"/>
+        <polyline points="{puntos_base}" fill="none" stroke="#24527a" stroke-width="3"/>
+        <polyline points="{puntos_ga}" fill="none" stroke="#d97706" stroke-width="3"/>
+        {''.join(marcas)}
+        <text x="{izquierda}" y="{alto-8}" font-size="11" fill="#64748b">0 L</text>
+        <text x="{ancho-derecha-55}" y="{alto-8}" font-size="11" fill="#64748b">{maximo:.0f} L</text>
+      </svg>
+      <p><span class="leyenda-salida base"></span> Mamdani Base
+         <span class="leyenda-salida ga"></span> Mamdani + GA</p>
+    </div>
+    """
+
+
 # ---------------------------------------------------------------------------
 # Consulta Mamdani.
 #
@@ -182,8 +281,15 @@ def grafico_pertenencia_svg(
 #    inferencia Mamdani Base y Mamdani + GA.
 # ---------------------------------------------------------------------------
 def bloque_consulta(qs: dict[str, list[str]], reglas_ga: np.ndarray) -> str:
+    """Prepara los datos del formulario, ejecuta Mamdani y arma su explicación.
+
+    Recibe los parámetros de la URL y el cromosoma aprendido por el GA.
+    Devuelve un aviso si los datos no son válidos; en otro caso devuelve HTML
+    con entradas, salidas, grados de pertenencia, gráficos y reglas activadas.
+    """
     # Valores por defecto: reproducen el ejemplo usado en la defensa/documentacion.
     try:
+        # El formulario envía texto; aquí se convierte a los tipos numéricos.
         sector = int(qs.get("sector", ["2"])[0])
         humedad = float(qs.get("humedad", ["42"])[0])
         dias = float(qs.get("dias", ["0.8"])[0])
@@ -195,6 +301,7 @@ def bloque_consulta(qs: dict[str, list[str]], reglas_ga: np.ndarray) -> str:
 
     # Se vuelve a leer el split oficial para evitar usar TEST en el armado de
     # conjuntos de salida. Esta misma restriccion existe en `riego_simple/main.py`.
+    # Se conserva solo TRAIN para que los conjuntos de salida no aprendan de TEST.
     train, _, _ = proyecto.leer_y_dividir_datos()
 
     # La salida de cantidad se calibra solo con casos positivos de TRAIN.
@@ -209,17 +316,65 @@ def bloque_consulta(qs: dict[str, list[str]], reglas_ga: np.ndarray) -> str:
     # se reutiliza la funcion defendida en el codigo principal del proyecto.
     caso = proyecto.consultar_caso(sector, humedad, dias, reglas_ga, universo, conjuntos)
 
+    # Reproduce las nueve fuerzas AND de esta entrada: mínimo de ambos grados.
+    activaciones = np.minimum(
+        caso["grados_humedad"][:, None], caso["grados_dias"][None, :],
+    ).reshape(1, 9)
+    # Solicita al motor los pasos internos de Base y GA, no estimaciones nuevas.
+    detalle_base = proyecto.desglosar_inferencia_mamdani(
+        activaciones, proyecto.REGLAS_BASE, universo, conjuntos,
+    )
+    detalle_ga = proyecto.desglosar_inferencia_mamdani(
+        activaciones, reglas_ga, universo, conjuntos,
+    )
+
     # Traduce los arreglos numericos de pertenencia a texto legible.
+    # La inferencia espera los grados de las etiquetas Baja, Media y Alta.
     h = " | ".join(
         f"{proyecto.ETIQUETAS_HUMEDAD[i]}={caso['grados_humedad'][i]:.3f}" for i in range(3)
     )
     d = " | ".join(
         f"{proyecto.ETIQUETAS_DIAS[i]}={caso['grados_dias'][i]:.3f}" for i in range(3)
     )
+    # Convierte la lista de reglas que activó Mamdani en una tabla para el panel.
     reglas = pd.DataFrame(caso["reglas_activadas"])
-    reglas_html = tabla(reglas, 9) if len(reglas) else "<p>Sin reglas activadas.</p>"
+    if len(reglas):
+        # Escribe la operación mínima para que se pueda comprobar cada regla.
+        reglas["calculo_fuerza"] = reglas.apply(
+            lambda fila: f"min({fila['grado_humedad']:.3f}, {fila['grado_dias']:.3f}) = {fila['grado']:.3f}",
+            axis=1,
+        )
+        reglas = reglas.rename(columns={
+            "regla": "Regla", "humedad": "Humedad", "grado_humedad": "Grado humedad",
+            "dias": "Días", "grado_dias": "Grado días", "calculo_fuerza": "Fuerza (mínimo)",
+            "base": "Consecuente Base", "ga": "Consecuente GA",
+        })
+        reglas_html = tabla(reglas, 9)
+    else:
+        reglas_html = "<p>Sin reglas activadas.</p>"
+
+    # Muestra la fuerza máxima que llega a cada conjunto de salida en cada método.
+    fuerzas_salida = pd.DataFrame({
+        "Conjunto de salida": proyecto.ETIQUETAS_SALIDA,
+        "Fuerza Base": detalle_base["grados_salida"][0],
+        "Fuerza GA": detalle_ga["grados_salida"][0],
+    })
+    fuerzas_html = tabla(fuerzas_salida, 3)
+
+    # Presenta numerador y denominador reales de la fórmula discreta del centroide.
+    centroide_html = "".join([
+        f"<p><b>Mamdani Base:</b> {detalle_base['numerador'][0]:,.3f} / "
+        f"{detalle_base['denominador'][0]:,.3f} = {detalle_base['litros'][0]:.2f} L</p>",
+        f"<p><b>Mamdani + GA:</b> {detalle_ga['numerador'][0]:,.3f} / "
+        f"{detalle_ga['denominador'][0]:,.3f} = {detalle_ga['litros'][0]:.2f} L</p>",
+    ])
+    grafico_salida = grafico_salida_agregada_svg(
+        universo, detalle_base["curva_agregada"][0], detalle_ga["curva_agregada"][0],
+        float(detalle_base["litros"][0]), float(detalle_ga["litros"][0]),
+    )
 
     # Graficos de inferencia para la consulta actual.
+    # Las mallas dibujan las curvas suaves; los marcadores identifican esta consulta.
     xs_h = np.linspace(-30, 30, 180)
     curvas_h = proyecto.tres_grados(xs_h, -20, 0, 20)
     xs_d = np.linspace(0, 8, 180)
@@ -252,6 +407,17 @@ def bloque_consulta(qs: dict[str, list[str]], reglas_ga: np.ndarray) -> str:
       <div class="svggrid">{grafo_h}{grafo_d}{grafo_s}</div>
       <h3>Reglas activadas</h3>
       <div class="scroll">{reglas_html}</div>
+      <details class="pasos-calculo">
+        <summary>Ver el cálculo completo de Base y GA</summary>
+        <p>La fuerza de cada regla es el mínimo entre el grado de humedad y el grado de días. Las reglas con la misma conclusión se agrupan tomando su fuerza máxima.</p>
+        <h4>Fuerza que recibe cada conjunto de salida</h4>
+        <div class="scroll">{fuerzas_html}</div>
+        <h4>Curvas de salida combinadas y centroides</h4>
+        {grafico_salida}
+        <h4>Cálculo final del centroide</h4>
+        <p>Se multiplica cada litro de la malla por su grado en la curva agregada y se suman esos productos. Luego se divide para la suma de los grados. El resultado es un volumen nominal estimado, no una medición real.</p>
+        {centroide_html}
+      </details>
     </div>
     """
 
@@ -260,6 +426,13 @@ def bloque_consulta(qs: dict[str, list[str]], reglas_ga: np.ndarray) -> str:
 # Galeria de graficas. Cada imagen abre una vista ampliada con CSS :target.
 # ---------------------------------------------------------------------------
 def bloque_graficas() -> tuple[str, str]:
+    """Crea las miniaturas de las gráficas disponibles y sus vistas ampliadas.
+
+    Devuelve dos fragmentos HTML: las tarjetas de la galería y sus ventanas
+    ampliadas. Si falta una imagen, omite solo esa gráfica.
+    """
+    # Las tarjetas y las ventanas se construyen por separado para insertarlas
+    # en dos zonas distintas de la página.
     cards, modales = [], []
     for i, (archivo, titulo, detalle) in enumerate(GRAFICAS, 1):
         if not (IMAGENES_DIR / archivo).exists():
@@ -296,6 +469,7 @@ PLANTILLA = Template("""<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Riego simple</title>
 <style>
+/* Colores y estilos generales para que el panel sea legible en distintas pantallas. */
 :root { --bg:#f8fafc; --ink:#17202a; --muted:#667085; --line:#e2e8f0; --brand:#244b68; }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--ink); font-family:Arial, Helvetica, sans-serif; }
@@ -328,7 +502,28 @@ form button { background:var(--brand); color:white; font-weight:700; cursor:poin
 .svggrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; margin:8px 0 14px; }
 .svgbox { border:1px solid var(--line); border-radius:8px; padding:9px; background:#fbfdff; }
 .svgbox b { display:block; font-size:13px; margin-bottom:2px; }
-.svgbox svg { width:100%; display:block; }
+.svgbox svg { width:100%; display:block; cursor:zoom-in; }
+.pasos-calculo { margin-top:18px; border:1px solid var(--line); border-radius:8px; padding:12px; }
+.pasos-calculo summary { color:var(--brand); font-weight:700; cursor:pointer; }
+.pasos-calculo h4 { margin:18px 0 8px; }
+.pasos-calculo p { line-height:1.5; }
+.salida-agregada { overflow:auto; border:1px solid var(--line); border-radius:8px; padding:8px; background:#fbfdff; }
+.salida-agregada svg { display:block; min-width:620px; width:100%; }
+.salida-agregada p { margin:4px 0; color:var(--muted); font-size:13px; }
+.leyenda-salida { display:inline-block; width:11px; height:11px; margin-left:12px; border-radius:50%; }
+.leyenda-salida.base { background:#24527a; }
+.leyenda-salida.ga { background:#d97706; }
+.visor-curva { position:fixed; inset:0; z-index:50; background:rgba(8,15,25,.94); color:white; }
+.visor-curva[hidden] { display:none; }
+.visor-curva-cabecera { position:absolute; inset:0 0 auto; height:58px; display:flex; align-items:center; gap:10px; padding:10px 16px; background:#17202a; }
+.visor-curva-cabecera strong { margin-right:auto; }
+.visor-curva button { min-width:40px; height:38px; border:1px solid #64748b; background:#263849; color:white; font-size:18px; cursor:pointer; }
+.visor-curva .curva-cerrar { min-width:74px; font-size:14px; }
+.visor-curva-pista { color:#d1d5db; font-size:12px; }
+.curva-viewport { position:absolute; inset:58px 0 0; overflow:hidden; touch-action:none; cursor:grab; }
+.curva-viewport.arrastrando { cursor:grabbing; }
+.curva-ampliada { position:absolute; left:50%; top:50%; width:min(92vw, 1400px); transform:translate(-50%, -50%) scale(1); transform-origin:center; }
+.curva-ampliada svg { display:block; width:100%; height:auto; background:#fbfdff; border-radius:8px; }
 .leyenda { display:flex; flex-wrap:wrap; gap:8px; color:var(--muted); font-size:11px; }
 .leyenda span { display:inline-flex; align-items:center; gap:4px; }
 .leyenda i { width:9px; height:9px; border-radius:50%; display:inline-block; }
@@ -346,11 +541,14 @@ code { background:#eef2f7; padding:2px 5px; border-radius:4px; }
 </style>
 </head>
 <body>
+<!-- Encabezado fijo con el nombre del sistema y los dos métodos comparados. -->
 <header><h1>Sistema genetico-difuso de riego</h1><p>Panel de resultados del modelo Mamdani + GA.</p></header>
+<!-- Los botones cambian entre paneles sin cargar otra página. -->
 <nav>
   $tabs
 </nav>
 <main>
+  <!-- Tarjetas con el tamaño de la partición temporal y el cromosoma aprendido. -->
   <section id="resumen" class="$resumen_cls">
     <h2>Resumen</h2>
     <div class="cards">$resumen_cards</div>
@@ -362,6 +560,7 @@ code { background:#eef2f7; padding:2px 5px; border-radius:4px; }
     </div>
   </section>
 
+  <!-- Formulario para probar una entrada nueva con el motor Mamdani. -->
   <section id="consulta" class="$consulta_cls">
     <h2>Consulta Mamdani</h2>
     <form method="get" action="/#consulta">
@@ -373,20 +572,24 @@ code { background:#eef2f7; padding:2px 5px; border-radius:4px; }
     $consulta
   </section>
 
+  <!-- Resultados agregados, resultados por sector y reglas aprendidas. -->
   <section id="metricas" class="$metricas_cls">
     <h2>Metricas y reglas</h2>
     <div class="grid"><div><h3>Metricas</h3><div class="scroll">$metricas</div></div><div><h3>Por sector</h3><div class="scroll">$por_sector</div></div></div>
     <h3>Reglas</h3><div class="scroll">$reglas</div>
   </section>
 
+  <!-- Predicciones individuales del periodo reservado para la prueba. -->
   <section id="testeo" class="$testeo_cls">
     <h2>Predicciones de TEST</h2><div class="scroll">$predicciones</div>
   </section>
 
+  <!-- Galería creada a partir de las figuras generadas desde los datos. -->
   <section id="graficas" class="$graficas_cls">
     <h2>Graficas</h2><div class="galeria">$graficas</div>
   </section>
 
+  <!-- Parámetros principales para ubicar los valores que usa el modelo. -->
   <section id="ficha" class="$ficha_cls">
     <h2>Ficha tecnica</h2>
     <div class="ficha">
@@ -400,21 +603,132 @@ code { background:#eef2f7; padding:2px 5px; border-radius:4px; }
   </section>
 </main>
 $modales
+<!-- Visor compartido para ampliar cualquiera de las curvas de pertenencia. -->
+<div id="visor-curva" class="visor-curva" role="dialog" aria-modal="true" aria-label="Curva de pertenencia ampliada" hidden>
+  <div class="visor-curva-cabecera">
+    <strong id="visor-curva-titulo">Curva de pertenencia</strong>
+    <span class="visor-curva-pista">Rueda del ratón para zoom; arrastra para mover</span>
+    <button type="button" id="curva-menos" aria-label="Alejar">−</button>
+    <button type="button" id="curva-porcentaje" aria-label="Restablecer zoom">100%</button>
+    <button type="button" id="curva-mas" aria-label="Acercar">+</button>
+    <button type="button" id="curva-cerrar" class="curva-cerrar">Cerrar</button>
+  </div>
+  <div id="curva-viewport" class="curva-viewport">
+    <div id="curva-ampliada" class="curva-ampliada"></div>
+  </div>
+</div>
 <script>
+// Muestra el panel solicitado y actualiza el botón que queda resaltado.
 function ver(id) {
   document.querySelectorAll('main section').forEach(s => s.classList.toggle('activa', s.id === id));
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('activo', b.dataset.panel === id));
 }
+// Asigna la acción de cambio a cada botón de navegación.
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => ver(b.dataset.panel));
+// Limpia la entrada mientras se escribe y limita sus dígitos y valor máximo.
 document.querySelectorAll('input[data-max-digits]').forEach(campo => {
   campo.addEventListener('input', () => {
+    // Acepta coma decimal y quita caracteres que no sean dígitos o punto.
     let v = campo.value.replace(',', '.').replace(/[^0-9.]/g, '');
     let p = v.split('.');
+    // Si se escribieron varios puntos, conserva el primero como separador decimal.
     if (p.length > 2) v = p[0] + '.' + p.slice(1).join('');
+    // Evita que el valor exceda la cantidad de dígitos permitida por el campo.
     while (v.replace(/\\D/g, '').length > Number(campo.dataset.maxDigits)) v = v.slice(0, -1);
+    // Al pasar el máximo permitido, reemplaza el dato por ese límite.
     if (v && !v.endsWith('.') && Number(v) > Number(campo.dataset.max)) v = campo.dataset.max;
     campo.value = v;
   });
+});
+
+// Abre la curva seleccionada en pantalla completa y conserva su título.
+const visorCurva = document.getElementById('visor-curva');
+const curvaViewport = document.getElementById('curva-viewport');
+const curvaAmpliada = document.getElementById('curva-ampliada');
+const botonZoom = document.getElementById('curva-porcentaje');
+let escalaCurva = 1;
+let moverX = 0;
+let moverY = 0;
+let arrastre = null;
+
+function actualizarCurva() {
+  // Aplica zoom y desplazamiento sin modificar los puntos ni los datos del SVG.
+  curvaAmpliada.style.transform = `translate(calc(-50% + ${moverX}px), calc(-50% + ${moverY}px)) scale(${escalaCurva})`;
+  botonZoom.textContent = `${Math.round(escalaCurva * 100)}%`;
+}
+
+function cambiarZoom(cantidad) {
+  // Evita que la imagen se vuelva demasiado pequeña o salga de control al ampliarla.
+  escalaCurva = Math.max(0.5, Math.min(6, escalaCurva * cantidad));
+  actualizarCurva();
+}
+
+document.querySelectorAll('.svgbox svg').forEach(svg => {
+  svg.setAttribute('tabindex', '0');
+  svg.setAttribute('aria-label', 'Abrir curva de pertenencia ampliada');
+  svg.addEventListener('click', () => {
+    const caja = svg.closest('.svgbox');
+    document.getElementById('visor-curva-titulo').textContent = caja.querySelector('b').textContent;
+    curvaAmpliada.replaceChildren(svg.cloneNode(true));
+    escalaCurva = 1;
+    moverX = 0;
+    moverY = 0;
+    actualizarCurva();
+    visorCurva.hidden = false;
+    document.body.style.overflow = 'hidden';
+    document.getElementById('curva-cerrar').focus();
+  });
+  // Permite abrir el visor con Enter o la barra espaciadora, además del clic.
+  svg.addEventListener('keydown', evento => {
+    if (evento.key === 'Enter' || evento.key === ' ') {
+      evento.preventDefault();
+      svg.click();
+    }
+  });
+});
+
+function cerrarVisorCurva() {
+  visorCurva.hidden = true;
+  document.body.style.overflow = '';
+  curvaAmpliada.replaceChildren();
+}
+
+document.getElementById('curva-cerrar').addEventListener('click', cerrarVisorCurva);
+document.getElementById('curva-mas').addEventListener('click', () => cambiarZoom(1.25));
+document.getElementById('curva-menos').addEventListener('click', () => cambiarZoom(0.8));
+botonZoom.addEventListener('click', () => {
+  escalaCurva = 1;
+  moverX = 0;
+  moverY = 0;
+  actualizarCurva();
+});
+
+// La rueda amplía/reduce y conserva el puntero como referencia del zoom.
+curvaViewport.addEventListener('wheel', evento => {
+  evento.preventDefault();
+  cambiarZoom(evento.deltaY < 0 ? 1.12 : 0.89);
+}, { passive: false });
+
+// Arrastrar con mouse o dedo permite recorrer la curva cuando está ampliada.
+curvaViewport.addEventListener('pointerdown', evento => {
+  arrastre = { x: evento.clientX - moverX, y: evento.clientY - moverY };
+  curvaViewport.classList.add('arrastrando');
+  curvaViewport.setPointerCapture(evento.pointerId);
+});
+curvaViewport.addEventListener('pointermove', evento => {
+  if (!arrastre) return;
+  moverX = evento.clientX - arrastre.x;
+  moverY = evento.clientY - arrastre.y;
+  actualizarCurva();
+});
+curvaViewport.addEventListener('pointerup', () => {
+  arrastre = null;
+  curvaViewport.classList.remove('arrastrando');
+});
+
+// Escape cierra el visor para volver rápidamente a la consulta.
+document.addEventListener('keydown', evento => {
+  if (evento.key === 'Escape' && !visorCurva.hidden) cerrarVisorCurva();
 });
 </script>
 </body>
@@ -426,6 +740,11 @@ document.querySelectorAll('input[data-max-digits]').forEach(campo => {
 # tablas, tarjetas, tabs y bloques visuales.
 # ---------------------------------------------------------------------------
 def renderizar_pagina(query: str = "") -> str:
+    """Lee los resultados, rellena la plantilla y devuelve la página completa.
+
+    `query` contiene los parámetros GET del formulario cuando se ejecuta una
+    consulta. Devuelve el HTML listo para enviarse al navegador.
+    """
     # Parametros GET del formulario: sector, humedad y dias.
     qs = parse_qs(query)
 
@@ -508,7 +827,11 @@ def renderizar_pagina(query: str = "") -> str:
 # Servidor HTTP minimo. La raiz entrega HTML y /img/nombre.png entrega graficas.
 # ---------------------------------------------------------------------------
 class AppHandler(BaseHTTPRequestHandler):
+    """Atiende las páginas del panel y sirve las imágenes de sus gráficas."""
+
     def do_GET(self) -> None:  # noqa: N802
+        """Resuelve las peticiones GET de la página principal y de las imágenes."""
+        # Se separa la ruta de sus parámetros, por ejemplo humedad y días.
         url = urlparse(self.path)
         if url.path.startswith("/img/"):
             self.servir_imagen(url.path.removeprefix("/img/"))
@@ -519,6 +842,8 @@ class AppHandler(BaseHTTPRequestHandler):
         self.send_error(404, "Ruta no encontrada")
 
     def enviar_html(self, contenido: str) -> None:
+        """Envía una página HTML con cabeceras y codificación UTF-8."""
+        # Primero se transforma el texto en bytes porque HTTP transmite bytes.
         data = contenido.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -527,12 +852,14 @@ class AppHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def servir_imagen(self, nombre: str) -> None:
+        """Envía una imagen de la carpeta permitida o responde que no existe."""
         # Path(...).name evita rutas externas como /img/../../archivo.
         ruta = IMAGENES_DIR / Path(unquote(nombre)).name
         if not ruta.exists() or ruta.parent != IMAGENES_DIR:
             self.send_error(404, "Imagen no encontrada")
             return
         data = ruta.read_bytes()
+        # El tipo MIME permite al navegador reconocer PNG, SVG u otro formato.
         tipo = mimetypes.guess_type(str(ruta))[0] or "application/octet-stream"
         self.send_response(200)
         self.send_header("Content-Type", tipo)
@@ -541,6 +868,7 @@ class AppHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def log_message(self, formato: str, *args) -> None:
+        """Muestra en consola cada solicitud recibida por el servidor local."""
         print(f"[interfaz] {self.address_string()} - {formato % args}")
 
 
@@ -548,11 +876,14 @@ class AppHandler(BaseHTTPRequestHandler):
 # Punto de entrada. Permite cambiar host/puerto si 8000 esta ocupado.
 # ---------------------------------------------------------------------------
 def main() -> None:
+    """Lee host y puerto, inicia el servidor y lo cierra al recibir Ctrl+C."""
+    # Estos argumentos permiten elegir una dirección o un puerto alternativo.
     parser = argparse.ArgumentParser(description="Panel local del proyecto de riego.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
 
+    # El servidor admite solicitudes concurrentes y entrega el panel local.
     servidor = ThreadingHTTPServer((args.host, args.port), AppHandler)
     print(f"Panel disponible en http://{args.host}:{args.port}")
     print("Ctrl+C para detener.")
@@ -565,4 +896,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Solo inicia el servidor al ejecutar directamente este archivo.
     main()

@@ -45,8 +45,8 @@ plt.rcParams.update({
 def guardar(figura: plt.Figure, nombre: str) -> None:
     """Crea la carpeta destino, escribe un PNG y libera la figura de memoria.
 
-    Recibe el objeto Figure ya dibujado y el nombre final del archivo. La
-    resolución de salida y el ajuste de márgenes se configuran antes de guardar.
+    Recibe el dibujo y su nombre de archivo. No devuelve datos: crea la carpeta
+    si hace falta, guarda el PNG y cierra el dibujo para liberar memoria.
     """
     # parents=True crea también carpetas intermedias y exist_ok evita error si ya existe.
     CARPETA_IMAGENES.mkdir(parents=True, exist_ok=True)
@@ -66,7 +66,9 @@ def datos_y_resultados() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
     Llama al mismo lector y divisor del programa principal, filtra objetivos
     positivos después de separar el tiempo, verifica que estén las salidas de la
-    última ejecución y devuelve las tablas requeridas por los gráficos.
+    última ejecución y devuelve tres tablas: TRAIN positivo, TEST positivo e
+    historial del GA. Si falta algún archivo, detiene el graficador y explica
+    que primero hay que ejecutar main.py.
     """
     # La función compartida valida columnas, mediciones, sectores y la purga temporal.
     train_todo, test_todo, _ = proyecto.leer_y_dividir_datos()
@@ -94,6 +96,7 @@ def graficar_histogramas(train: pd.DataFrame, test: pd.DataFrame) -> None:
 
     Usa observaciones positivas de TRAIN y TEST. La superposición permite
     comparar forma y dispersión; las barras por sector muestran el desbalance.
+    Recibe las dos tablas ya separadas; guarda cuatro imágenes y no devuelve datos.
     """
     # Relaciona cada columna del CSV con la etiqueta horizontal y el PNG resultante.
     series = [
@@ -104,6 +107,7 @@ def graficar_histogramas(train: pd.DataFrame, test: pd.DataFrame) -> None:
         ("dias_sin_riego", "Días desde el último riego estándar terminado",
          "03_histograma_recencia_train_test.png"),
     ]
+    # Cada elemento indica qué columna dibujar, cómo titularla y qué nombre guardar.
     for columna, etiqueta, nombre in series:
         # Crea eje nuevo para que cada magnitud tenga su propia escala.
         figura, eje = plt.subplots()
@@ -111,7 +115,9 @@ def graficar_histogramas(train: pd.DataFrame, test: pd.DataFrame) -> None:
         eje.hist(train[columna], bins=24, alpha=0.65, label="TRAIN", color="#2878B5")
         eje.hist(test[columna], bins=24, alpha=0.60, label="TEST", color="#E07A2D")
         # Define título y nombres de ejes; leyenda identifica los periodos.
+        # Pone título, rótulos de ejes y descripción de colores.
         eje.set(title=f"Distribución de {etiqueta.lower()}", xlabel=etiqueta, ylabel="Frecuencia")
+        # Añade la leyenda TRAIN/TEST y manda el dibujo a la función de guardado.
         eje.legend()
         guardar(figura, nombre)
 
@@ -134,6 +140,7 @@ def graficar_modelo(test: pd.DataFrame) -> None:
 
     Las predicciones y métricas se leen de los CSV producidos por main.py; por eso
     esta función no vuelve a entrenar el modelo ni usa TEST para ajustar parámetros.
+    Recibe las filas TEST positivas y guarda cuatro imágenes PNG.
     """
     # Convierte fecha a datetime para que el archivo quede preparado para ejes de tiempo.
     predicciones = pd.read_csv(CARPETA_RESULTADOS / "predicciones.csv", parse_dates=["fecha"])
@@ -148,8 +155,10 @@ def graficar_modelo(test: pd.DataFrame) -> None:
     limite = max(predicciones["litros_nominales_objetivo"].max(), predicciones["litros_ga"].max())
     # La recta y=x representa predicción idéntica al objetivo, solo como referencia.
     eje.plot([0, limite], [0, limite], "k--", linewidth=1, label="Estimación perfecta")
+    # Nombra ambos ejes: horizontal es objetivo y vertical es estimación.
     eje.set(title="Volumen nominal observado y estimado por Mamdani + GA",
             xlabel="Objetivo reconstruido en TEST (L)", ylabel="Estimación del modelo (L)")
+    # Explica los colores de sector y la diagonal de estimación perfecta.
     eje.legend(ncol=2)
     guardar(figura, "05_objetivo_vs_estimacion_test.png")
 
@@ -161,6 +170,7 @@ def graficar_modelo(test: pd.DataFrame) -> None:
     ])
     # Imprime el valor numérico encima de cada barra para lectura sin estimar escala.
     eje.bar_label(barras, fmt="%.1f", padding=3)
+    # Etiqueta la magnitud y permite inclinar nombres largos para que no se encimen.
     eje.set(title="Error absoluto medio en el periodo TEST", ylabel="MAE (L)")
     eje.tick_params(axis="x", labelrotation=15)
     guardar(figura, "06_comparacion_mae_test.png")
@@ -176,6 +186,7 @@ def graficar_modelo(test: pd.DataFrame) -> None:
             label="Mamdani Base", color="#2878B5")
     eje.bar(posiciones + ancho / 2, por_sector["mae_ga_litros"], ancho,
             label="Mamdani + GA", color="#3A9D5D")
+    # Asocia las posiciones numéricas de las barras con los números de sector.
     eje.set(title="MAE de TEST por sector", xlabel="Sector", ylabel="MAE (L)",
             xticks=posiciones, xticklabels=por_sector["sector"].astype(str))
     eje.legend()
@@ -187,6 +198,7 @@ def graficar_modelo(test: pd.DataFrame) -> None:
              alpha=0.75, color="#2878B5")
     eje.set(title="Volumen nominal positivo observado durante TEST",
             xlabel="Fecha de decisión (06:00)", ylabel="Volumen objetivo (L)")
+    # Ajusta las fechas para que sus etiquetas inclinadas puedan leerse.
     figura.autofmt_xdate()
     guardar(figura, "08_objetivos_en_el_tiempo_test.png")
 
@@ -197,9 +209,11 @@ def graficar_aprendizaje(train: pd.DataFrame, historial: pd.DataFrame) -> None:
     El historial muestra el mejor MAE TRAIN en cada generación. Las entradas usan
     los puntos configurados en main.py; los conjuntos de salida se vuelven a
     construir llamando la función del proyecto sobre los litros positivos TRAIN.
+    Recibe TRAIN e historial del GA; guarda tres imágenes PNG.
     """
     # Cada fila del historial se origina en evaluar la población del GA sobre TRAIN.
     figura, eje = plt.subplots()
+    # Compara generación (eje horizontal) con mejor error logrado (eje vertical).
     eje.plot(historial["generacion"], historial["mejor_mae_litros_train"],
              label="Mejor MAE TRAIN", color="#2878B5")
     eje.set(title="Evolución del algoritmo genético sobre TRAIN",
@@ -212,6 +226,7 @@ def graficar_aprendizaje(train: pd.DataFrame, historial: pd.DataFrame) -> None:
     # Las mallas x solo definen resolución visual; las curvas vienen de tres_grados.
     humedad = np.linspace(-30, 30, 400)
     dias = np.linspace(0, 8, 400)
+    # Reutiliza una paleta fija para que el mismo término tenga el mismo color.
     colores = ["#2878B5", "#3A9D5D", "#C74B50"]
     # Itera Baja/Media/Alta; cada columna de tres_grados es un término difuso.
     for i, etiqueta in enumerate(proyecto.ETIQUETAS_HUMEDAD):
@@ -221,6 +236,7 @@ def graficar_aprendizaje(train: pd.DataFrame, historial: pd.DataFrame) -> None:
     for i, etiqueta in enumerate(proyecto.ETIQUETAS_DIAS):
         ejes[1].plot(dias, proyecto.tres_grados(dias, 0.5, 1.5, 4.5)[:, i],
                      label=etiqueta, color=colores[i])
+    # Describe qué variable muestra cada panel y qué significa el eje vertical.
     ejes[0].set(title="Humedad relativa al MADP", xlabel="Diferencia respecto al MADP", ylabel="Pertenencia")
     ejes[1].set(title="Recencia del riego estándar", xlabel="Días desde el último riego", ylabel="Pertenencia")
     # Limita los grados al intervalo difuso [0,1] y añade leyenda a ambos paneles.
@@ -233,6 +249,7 @@ def graficar_aprendizaje(train: pd.DataFrame, historial: pd.DataFrame) -> None:
     positivos_train = train[NOMBRE_OBJETIVO].to_numpy(float)
     # Reutiliza los cuantiles, universo y pertenencias que usa el motor Mamdani.
     universo, conjuntos, _ = proyecto.preparar_salida(positivos_train)
+    # Dibuja las tres funciones de salida sobre el universo de litros del modelo.
     figura, eje = plt.subplots()
     for i, etiqueta in enumerate(proyecto.ETIQUETAS_SALIDA):
         eje.plot(universo, conjuntos[i], label=etiqueta, color=colores[i])
@@ -243,7 +260,11 @@ def graficar_aprendizaje(train: pd.DataFrame, historial: pd.DataFrame) -> None:
 
 
 def main() -> None:
-    """Punto de entrada: carga fuentes y llama a los tres grupos de gráficas."""
+    """Genera todos los gráficos a partir de los archivos existentes.
+
+    No recibe argumentos. Lee datos y resultados, llama a los tres grupos de
+    gráficos y guarda las imágenes PNG; no devuelve un valor.
+    """
     # Primero valida que existen los datos/modelo; luego dibuja distribuciones,
     # resultados y parámetros difusos en archivos PNG separados.
     train, test, historial = datos_y_resultados()

@@ -24,8 +24,9 @@ ORIGEN = CARPETA.parent / "datasets" / "arnesano_2025" / "02_processed_data"
 # posterior usado para evaluar (TEST). Se mantiene fijo para que los resultados
 # no cambien por probar cortes distintos hasta encontrar uno favorable.
 FECHA_CORTE = pd.Timestamp("2025-06-28 06:00:00")
-# MADP significa punto de referencia sectorial para humedad del suelo.
-# Cada valor permite convertir la lectura absoluta del sensor en una diferencia.
+# MADP es el umbral de agotamiento de agua permitido para el manejo del cultivo.
+# Cada sector tiene su umbral; lo restamos de la lectura para ver cuánto queda
+# por encima o por debajo de esa referencia.
 MADP_POR_SECTOR = {1: 40, 2: 40, 3: 60, 4: 80, 5: 70}
 # Caudal nominal documentado para convertir minutos de válvula abierta a litros.
 CAUDAL_POR_SECTOR = {1: 1.1, 2: 1.1, 3: 1.1, 4: 1.1, 5: 0.4}  # L/min
@@ -84,22 +85,26 @@ def resumir_riego_ventana(eventos: pd.DataFrame, inicio: pd.Timestamp, sector: i
 
 
 def preparar_datos() -> pd.DataFrame:
-    """Construye y guarda el CSV de observaciones diarias por sector.
+    """Construye y guarda el CSV de observaciones diarias de cada sector.
 
     Combina la telemetría de humedad con los eventos de válvula: selecciona una
     medición ya terminada a las 06:00, calcula la recencia del último riego
     estándar y reconstruye el volumen nominal estándar de las 24 horas futuras.
-    Los datos se ordenan y se escriben en datos_riego.csv para el pipeline.
+    No recibe argumentos: lee los archivos originales desde ORIGEN. Devuelve la
+    tabla creada y la guarda también en datos_riego.csv para el resto del programa.
     """
     # Define las rutas de las tablas procesadas suministradas por el dataset.
     archivo_eventos = ORIGEN / "irrigation_events" / "final_irrigation_events.csv"
     if not archivo_eventos.exists():
+        # Sin el archivo de eventos no se puede construir la etiqueta de litros.
         raise FileNotFoundError(f"Falta la fuente original: {archivo_eventos}")
     # Lee eventos y convierte inicio/fin de texto a fechas para operar con tiempos.
     eventos = pd.read_csv(archivo_eventos, parse_dates=["start", "end"])
     # Filtra solo riegos estándar para determinar el último día y la recencia.
     estandar = eventos[eventos["type"].eq("standard_irrigation")]
+    # Busca el último fin de riego estándar y conserva solo su fecha de calendario.
     ultimo_dia = estandar["end"].max().normalize()
+    # Aquí se acumulará una fila por cada combinación de sector y fecha válida.
     filas = []
 
     # Procesa cada sector con su MADP específico y su propio archivo de sensores.
@@ -109,7 +114,6 @@ def preparar_datos() -> pd.DataFrame:
             ORIGEN / "merged" / f"dataset_zone_{sector}.csv",
             usecols=["ts", "soil_moisture"],
         )
-        # ts marca el INICIO de un promedio de diez minutos; solo existe al terminar.
         # Cada ts identifica el inicio de un bloque promedio de 10 minutos; al
         # sumarle 10 se marca el instante en que ese promedio ya está completo.
         sensores["ts"] = pd.to_datetime(sensores["ts"]) + pd.Timedelta(minutes=10)
@@ -117,7 +121,9 @@ def preparar_datos() -> pd.DataFrame:
         sensores = sensores[sensores["soil_moisture"].between(0, 100)].sort_values("ts")
 
         # Obtiene eventos del sector actual y, de ellos, los riegos estándar.
+        # Separa todos los eventos del sector actual para consultar válvulas abiertas.
         eventos_sector = eventos[eventos["sector"].eq(sector)]
+        # De esos eventos, conserva los estándar para calcular recencia.
         estandar_sector = estandar[estandar["sector"].eq(sector)]
         # Guarda finales como arreglo cronológico NumPy para búsqueda binaria rápida.
         finales = np.sort(estandar_sector["end"].to_numpy(dtype="datetime64[ns]"))
@@ -199,6 +205,8 @@ def leer_y_dividir_datos() -> tuple[pd.DataFrame, pd.DataFrame, int]:
         "litros_nominales_riego_24h",
     ]
     # isna identifica faltantes; any por eje y el segundo any producen un solo sí/no.
+    # Comprueba todas las columnas requeridas: primero busca vacíos por columna,
+    # luego combina el resultado para saber si existe algún faltante en la tabla.
     if datos[necesarias].isna().any().any():
         raise ValueError("El CSV contiene valores faltantes en columnas necesarias.")
     # Evita fuga temporal: una medición futura no puede alimentar una decisión 06:00.
@@ -208,6 +216,7 @@ def leer_y_dividir_datos() -> tuple[pd.DataFrame, pd.DataFrame, int]:
     if not datos["sector"].isin(MADP_POR_SECTOR).all():
         raise ValueError("Hay un sector sin MADP o caudal documentado.")
     if (datos["litros_nominales_riego_24h"] < 0).any():
+        # Un volumen reconstruido no puede ser menor que cero.
         raise ValueError("El volumen nominal no puede ser negativo.")
     # Verifica coherencia: cero eventos debe corresponder exactamente a cero litros.
     if ((datos["numero_eventos_riego_24h"] == 0) !=
@@ -221,6 +230,7 @@ def leer_y_dividir_datos() -> tuple[pd.DataFrame, pd.DataFrame, int]:
     # Resta tamaños para contar la frontera temporal no asignada a ningún bloque.
     purgados = len(datos) - len(train) - len(test)
     if not len(train) or not len(test) or purgados == 0:
+        # Detiene la ejecución si falta un periodo o no se aplicó la purga esperada.
         raise ValueError("La división temporal o su día de purga están vacíos.")
     # Devuelve copias particionadas y el conteo de filas intermedias descartadas.
     return train, test, purgados
@@ -234,7 +244,9 @@ def tres_grados(valores: np.ndarray, bajo: float, centro: float, alto: float) ->
 
     Baja y Alta son hombros lineales saturados por np.clip. Media completa la
     partición restando ambos hombros a 1. El resultado tiene forma (n, 3) y cada
-    fila representa grados de pertenencia, no probabilidades.
+    fila representa grados de pertenencia, no probabilidades. Recibe los valores
+    y los tres puntos que definen las rampas; devuelve una fila [Baja, Media, Alta]
+    por cada valor.
     """
     # Asegura operaciones numéricas NumPy incluso si llega una lista de Python.
     valores = np.asarray(valores, dtype=float)
@@ -254,7 +266,9 @@ def fuzzificar(datos: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]
     Calcula tres grados de humedad y tres de recencia por fila. El producto
     cartesiano combina cada término de humedad con cada término temporal; mínimo
     implementa el AND difuso de Mamdani. Devuelve grados de ambas entradas y una
-    matriz (filas, 9) de activaciones en el orden usado por los cromosomas.
+    matriz (filas, 9) de activaciones en el orden usado por los cromosomas. Recibe
+    la tabla de observaciones y devuelve los grados de humedad, los grados de días
+    y la activación de cada regla.
     """
     # Obtiene los tres conjuntos difusos de la entrada relativa al MADP.
     humedad = tres_grados(datos["humedad_relativa_madp"].to_numpy(), -20, 0, 20)
@@ -271,7 +285,8 @@ def preparar_salida(litros_train: np.ndarray) -> tuple[np.ndarray, np.ndarray, n
 
     Los cuantiles 25, 50 y 75 fijan los puntos de Baja/Media/Alta; el universo
     discreto va desde cero hasta el máximo de litros positivos de entrenamiento.
-    Devuelve universo, matriz de conjuntos (3, puntos) y los tres cuantiles.
+    Recibe los litros positivos de TRAIN y devuelve tres cosas: el eje de litros,
+    las tres funciones de salida y los cuantiles que las definen.
     """
     # Rechaza conjuntos vacíos o valores no positivos: esta salida modela cantidad
     # de riego condicional, y las observaciones sin riego se excluyen del ajuste.
@@ -280,6 +295,7 @@ def preparar_salida(litros_train: np.ndarray) -> tuple[np.ndarray, np.ndarray, n
     # Calcula cuartil inferior, mediana y cuartil superior de TRAIN solamente.
     q25, q50, q75 = np.quantile(litros_train, [0.25, 0.50, 0.75])
     if not q25 < q50 < q75:
+        # Si los cuartiles coinciden, no se pueden dibujar tres conjuntos distintos.
         raise ValueError("Los cuantiles de TRAIN no permiten tres conjuntos distintos.")
     # Divide el intervalo posible en 501 puntos para integrar el centroide.
     universo = np.linspace(0, float(np.max(litros_train)), 501)
@@ -301,6 +317,25 @@ def inferir_mamdani(
     Para cada término de salida, toma la activación máxima entre las reglas que
     concluyen ese término. Recorta su función de pertenencia con mínimo, agrega
     los términos con máximo y obtiene el centroide discreto ponderado en litros.
+    Recibe activaciones de reglas, sus conclusiones, los puntos del eje de litros
+    y las funciones de salida; devuelve una estimación por cada observación.
+    """
+    """Devuelve solo los litros estimados por la inferencia Mamdani."""
+    return desglosar_inferencia_mamdani(
+        activaciones, cromosoma, universo, conjuntos_salida,
+    )["litros"]
+
+
+def desglosar_inferencia_mamdani(
+    activaciones: np.ndarray, cromosoma: np.ndarray,
+    universo: np.ndarray, conjuntos_salida: np.ndarray,
+) -> dict[str, np.ndarray]:
+    """Calcula la salida Mamdani y conserva cada paso para poder explicarlo.
+
+    Recibe las fuerzas de activación de las nueve reglas, el consecuente de cada
+    regla, el eje de litros y las funciones de pertenencia de salida. Devuelve
+    las fuerzas Baja/Media/Alta, la curva agregada, el numerador, el denominador
+    y el centroide final para cada observación.
     """
     # Evita índices inválidos y cromosomas con longitud o valores inesperados.
     if len(cromosoma) != 9 or not np.isin(cromosoma, [0, 1, 2]).all():
@@ -317,21 +352,34 @@ def inferir_mamdani(
         np.minimum(grados_salida[:, termino, None], conjuntos_salida[termino])
         for termino in range(3)
     ])
-    # Suma grados de todos los puntos: denominador del centroide discreto.
+    # Suma los grados de la curva agregada: es el denominador del centroide.
     area = agregada.sum(axis=1)
-    # Multiplica cada grado por su litro, suma numeradores y divide por el área.
-    # np.divide usa cero como salida si no hay regla activa, evitando división 0/0.
-    return np.divide(
-        (agregada * universo).sum(axis=1), area,
+    # Pondera cada litro por su grado agregado y suma: es el numerador.
+    numerador = (agregada * universo).sum(axis=1)
+    # Divide numerador por denominador para hallar el centroide de cada salida.
+    # Si ninguna regla se activa, devuelve cero y evita una división entre cero.
+    litros = np.divide(
+        numerador, area,
         out=np.zeros(len(area)), where=area > 0,
     )
+    return {
+        "grados_salida": grados_salida,
+        "curva_agregada": agregada,
+        "numerador": numerador,
+        "denominador": area,
+        "litros": litros,
+    }
 
 
 # ============================================================
 # 6. ALGORITMO GENÉTICO
 # ============================================================
 def calcular_mae(reales: np.ndarray, estimados: np.ndarray) -> float:
-    """Promedia la magnitud del error fila a fila, conservando unidad litros."""
+    """Calcula el error absoluto promedio entre cantidades reales y estimadas.
+
+    Recibe dos listas NumPy del mismo tamaño y devuelve un único error promedio,
+    expresado en la misma unidad que los datos (en este proyecto, litros).
+    """
     # Resta elemento a elemento, toma valor absoluto, promedia y convierte a float.
     return float(np.mean(np.abs(reales - estimados)))
 
@@ -340,7 +388,12 @@ def calcular_fitness(
     cromosoma: np.ndarray, activaciones: np.ndarray, reales: np.ndarray,
     universo: np.ndarray, conjuntos_salida: np.ndarray,
 ) -> float:
-    """Convierte el MAE de TRAIN a aptitud: menor error equivale a más fitness."""
+    """Mide qué tan conveniente es un cromosoma para el algoritmo genético.
+
+    Recibe un cromosoma y datos de entrenamiento; llama a Mamdani para estimar
+    litros y transforma el MAE en una puntuación. Devuelve mayor puntuación cuando
+    el error es menor.
+    """
     # Menos error absoluto en litros -> fitness mayor; solo se usa TRAIN.
     estimados = inferir_mamdani(activaciones, cromosoma, universo, conjuntos_salida)
     return 1.0 / (1.0 + calcular_mae(reales, estimados))
@@ -351,7 +404,8 @@ def mutar(cromosoma: np.ndarray, azar: np.random.Generator) -> np.ndarray:
 
     azar produce una máscara independiente para cada una de las nueve posiciones.
     A cada posición mutada se le suma 1 o 2 módulo 3: así nunca conserva su valor
-    previo y sigue perteneciendo al dominio {0, 1, 2}.
+    previo y sigue perteneciendo al dominio {0, 1, 2}. Recibe un cromosoma y el
+    generador aleatorio; devuelve una copia posiblemente modificada.
     """
     # Copia evita modificar al padre almacenado en la población original.
     hijo = cromosoma.copy()
@@ -359,6 +413,7 @@ def mutar(cromosoma: np.ndarray, azar: np.random.Generator) -> np.ndarray:
     cambia = azar.random(9) < PROB_MUTACION
     # Cuenta mutaciones; sortea desplazamiento 1 o 2; módulo 3 da otro consecuente.
     hijo[cambia] = (hijo[cambia] + azar.integers(1, 3, size=int(cambia.sum()))) % 3
+    # Entrega el nuevo cromosoma para que reemplace al hijo, no al padre original.
     return hijo
 
 
@@ -372,13 +427,17 @@ def ejecutar_ga(
     el fitness en TRAIN, se conserva el mejor histórico y se crea la población
     siguiente usando elitismo, selección por ruleta, cruce de un punto y mutación.
     Devuelve el mejor cromosoma hallado y una fila de trazabilidad por generación.
+    Recibe las activaciones y volúmenes de TRAIN, junto con las funciones de salida.
     """
     # Generador local determinista: la misma semilla reproduce toda la búsqueda.
     azar = np.random.default_rng(SEMILLA)
     # Crea una matriz 30×9 con valores aleatorios 0, 1 o 2.
     poblacion = azar.integers(0, 3, size=(TAMANO_POBLACION, 9))
+    # Inicializa la mejor solución con el primer individuo; su puntuación empieza
+    # por debajo de cualquier puntuación válida para que la primera evaluación gane.
     mejor = poblacion[0].copy()
     mejor_fitness = -1.0
+    # Lista de resúmenes que después se convertirá en una tabla CSV.
     historial = []
 
     # Incluye generación cero (población inicial) y la generación final 50.
@@ -391,6 +450,7 @@ def ejecutar_ga(
         # argmax devuelve la posición del mayor fitness de la generación actual.
         indice = int(np.argmax(fitness))
         if fitness[indice] > mejor_fitness:
+            # Reemplaza la solución guardada solo si esta generación la mejora.
             mejor, mejor_fitness = poblacion[indice].copy(), float(fitness[indice])
         # Registra mejor aptitud histórica, su conversión inversa a MAE y el
         # fitness medio de la generación; estos datos se guardan luego en CSV.
@@ -401,6 +461,7 @@ def ejecutar_ga(
             "fitness_promedio": float(fitness.mean()),
         })
         if generacion == GENERACIONES:
+            # Ya se evaluó la última generación; no hace falta crear otra población.
             break
 
         # Inserta primero una copia intacta del mejor para garantizar elitismo.
@@ -427,7 +488,11 @@ def ejecutar_ga(
 # 7. EVALUACIÓN Y CONSULTA MANUAL
 # ============================================================
 def evaluar_modelo(nombre: str, reales: np.ndarray, estimados: np.ndarray) -> dict:
-    """Calcula MAE, RMSE y MedAE para comparar predicciones con objetivos."""
+    """Calcula tres medidas de error para un modelo.
+
+    Recibe el nombre del método, los litros observados y los litros estimados.
+    Devuelve un diccionario con MAE, RMSE y MedAE, todos expresados en litros.
+    """
     # El signo identifica sobre/subestimación; métricas posteriores usan magnitudes.
     errores = reales - estimados
     # MAE promedia absolutos; RMSE penaliza más errores grandes; MedAE usa mediana.
@@ -440,7 +505,12 @@ def evaluar_modelo(nombre: str, reales: np.ndarray, estimados: np.ndarray) -> di
 
 
 def tabla_reglas(reglas_ga: np.ndarray) -> pd.DataFrame:
-    """Construye tabla legible que alinea regla, antecedentes y consecuentes."""
+    """Crea una tabla que permite leer y comparar las nueve reglas.
+
+    Recibe los nueve consecuentes encontrados por el GA. Devuelve una tabla con
+    número de regla, antecedentes y consecuentes manual/genético.
+    """
+    # Cada fila de esta lista será una fila de la tabla final.
     filas = []
     # Dos bucles recorren las tres etiquetas de cada una de las dos entradas.
     for humedad in range(3):
@@ -448,6 +518,7 @@ def tabla_reglas(reglas_ga: np.ndarray) -> pd.DataFrame:
             # Convierte el par de índices a la posición lineal del cromosoma.
             numero = 3 * humedad + dias
             # Guarda textos de antecedentes y los consecuentes de base y GA.
+            # Convierte códigos numéricos a palabras para que la regla se entienda.
             filas.append({
                 "regla": f"R{numero + 1}",
                 "humedad": ETIQUETAS_HUMEDAD[humedad],
@@ -468,6 +539,8 @@ def consultar_caso(
     Convierte humedad absoluta a diferencia respecto del MADP del sector,
     limita la recencia al máximo operativo, fuzzifica el caso, enumera reglas
     activas y llama dos veces al motor Mamdani: con reglas manuales y con GA.
+    Recibe sector, humedad medida, días, cromosoma GA y conjuntos de salida.
+    Devuelve un diccionario con grados, reglas activadas y ambas estimaciones.
     """
     # Busca el punto de referencia de humedad para el sector solicitado.
     madp = MADP_POR_SECTOR[sector]
@@ -486,7 +559,9 @@ def consultar_caso(
             activadas.append({
                 "regla": f"R{indice + 1}",
                 "humedad": ETIQUETAS_HUMEDAD[indice // 3],
+                "grado_humedad": float(grados_h[0, indice // 3]),
                 "dias": ETIQUETAS_DIAS[indice % 3],
+                "grado_dias": float(grados_d[0, indice % 3]),
                 "grado": float(grado),
                 "base": ETIQUETAS_SALIDA[REGLAS_BASE[indice]],
                 "ga": ETIQUETAS_SALIDA[reglas_ga[indice]],
@@ -510,9 +585,12 @@ def ejecutar(args: argparse.Namespace) -> None:
     Esta función conecta las piezas: obtiene datos, separa periodos, filtra
     cantidades positivas, configura conjuntos, ejecuta el GA, compara modelos,
     guarda cinco CSV y, si se pidieron los argumentos, explica una consulta.
+    Recibe los argumentos leídos de la terminal; no devuelve un valor, sino que
+    muestra resultados y escribe archivos dentro de la carpeta de salida.
     """
     # La preparación desde archivos fuente solo se ejecuta cuando se solicita.
     if args.preparar:
+        # Reconstruye la tabla desde archivos procesados del dataset original.
         datos = preparar_datos()
         print(f"Datos preparados: {len(datos)} decisiones en {ARCHIVO_DATOS}")
 
@@ -522,10 +600,12 @@ def ejecutar(args: argparse.Namespace) -> None:
     train = train_todo[train_todo["litros_nominales_riego_24h"] > 0].copy()
     test = test_todo[test_todo["litros_nominales_riego_24h"] > 0].copy()
     if train.empty or test.empty:
+        # El aprendizaje y la evaluación necesitan al menos un riego positivo cada uno.
         raise ValueError("Se necesitan casos de cantidad en TRAIN y TEST.")
 
     # Extrae etiquetas numéricas NumPy para cálculos matriciales en el modelo.
     reales_train = train["litros_nominales_riego_24h"].to_numpy(float)
+    # Copia los objetivos TEST a NumPy; se reservan para evaluación, no para aprender.
     reales_test = test["litros_nominales_riego_24h"].to_numpy(float)
     # Deriva escala y pertenencias de salida exclusivamente del objetivo TRAIN.
     universo, conjuntos_salida, puntos = preparar_salida(reales_train)
@@ -558,7 +638,9 @@ def ejecutar(args: argparse.Namespace) -> None:
     ])
     # Copia fecha, sector y objetivo; conserva la identidad de cada caso evaluado.
     tabla_pred = test[["fecha", "sector", "litros_nominales_riego_24h"]].copy()
+    # Cambia el nombre largo de la etiqueta por uno corto para el archivo de salida.
     tabla_pred = tabla_pred.rename(columns={"litros_nominales_riego_24h": "litros_nominales_objetivo"})
+    # Añade una columna con las predicciones de cada modelo para comparar fila a fila.
     tabla_pred["litros_base"] = pred_base
     tabla_pred["litros_ga"] = pred_ga
     tabla_pred["litros_mediana_train"] = pred_mediana
@@ -567,8 +649,11 @@ def ejecutar(args: argparse.Namespace) -> None:
     # Resume error por sector; un sector vacío recibe NaN, no un error artificial cero.
     filas_sector = []
     for sector in MADP_POR_SECTOR:
+        # La máscara marca qué filas de TEST pertenecen al sector actual.
         mascara = test["sector"].to_numpy() == sector
+        # Cuenta cuántos casos hay para saber si las métricas se pueden calcular.
         cantidad = int(mascara.sum())
+        # Guarda promedio y errores solo si existe algún caso; si no, deja el dato vacío.
         filas_sector.append({
             "sector": sector,
             "casos_test": cantidad,
@@ -576,10 +661,12 @@ def ejecutar(args: argparse.Namespace) -> None:
             "mae_base_litros": calcular_mae(reales_test[mascara], pred_base[mascara]) if cantidad else np.nan,
             "mae_ga_litros": calcular_mae(reales_test[mascara], pred_ga[mascara]) if cantidad else np.nan,
         })
+    # Convierte los resúmenes por sector en una tabla para guardar e imprimir.
     por_sector = pd.DataFrame(filas_sector)
 
     # Crea la carpeta de salida si no existe y reemplaza los CSV de la corrida actual.
     CARPETA_RESULTADOS.mkdir(exist_ok=True)
+    # Guarda una tabla por archivo; index=False evita añadir un número de fila artificial.
     tabla_reglas(reglas_ga).to_csv(CARPETA_RESULTADOS / "reglas.csv", index=False)
     historial.to_csv(CARPETA_RESULTADOS / "historial_ga.csv", index=False)
     tabla_pred.to_csv(CARPETA_RESULTADOS / "predicciones.csv", index=False)
@@ -613,18 +700,23 @@ def ejecutar(args: argparse.Namespace) -> None:
 
     # La consulta es opcional; si se entrega cualquier argumento de consulta,
     # exige recibir el grupo completo sector-humedad-días y validar su dominio.
+    # Si el usuario escribió cualquiera de los tres datos, se procesa la consulta.
     if args.sector is not None or args.humedad is not None or args.dias is not None:
         if args.sector is None or args.humedad is None or args.dias is None:
+            # Exige los tres datos juntos para que la consulta tenga sentido.
             raise ValueError("Indique juntos --sector, --humedad y --dias.")
         if (args.sector not in MADP_POR_SECTOR or not 0 <= args.humedad <= 100
                 or args.dias < 0):
+            # Comprueba rango y existencia de sector antes de llamar al modelo.
             raise ValueError("Use sector 1–5, humedad 0–100 y días >= 0.")
+        # Consulta el caso y conserva grados/reglas para explicar el resultado.
         caso = consultar_caso(args.sector, args.humedad, args.dias,
                               reglas_ga, universo, conjuntos_salida)
         print("\nConsulta manual de volumen nominal, condicional a un riego estándar")
         print(f"Sector {args.sector} | Humedad {args.humedad:.1f} | "
               f"MADP {caso['madp']} | Humedad relativa {caso['humedad_relativa']:.1f}")
         print(f"Días desde último riego estándar terminado: {args.dias:.2f}")
+        # zip une cada etiqueta con su grado y dict lo muestra como nombre: valor.
         print("Grados de humedad:", dict(zip(
             ETIQUETAS_HUMEDAD, [round(float(x), 3) for x in caso["grados_humedad"]]
         )))
@@ -632,6 +724,7 @@ def ejecutar(args: argparse.Namespace) -> None:
             ETIQUETAS_DIAS, [round(float(x), 3) for x in caso["grados_dias"]]
         )))
         print("Reglas activadas:")
+        # Convierte las reglas activas a tabla de consola, sin columna de índice.
         print(pd.DataFrame(caso["reglas_activadas"]).to_string(index=False))
         print(f"Mamdani Base: {caso['litros_base']:.2f} L")
         print(f"Mamdani + GA: {caso['litros_ga']:.2f} L")
@@ -642,8 +735,11 @@ if __name__ == "__main__":
     # argparse construye la interfaz de línea de comandos y convierte cada
     # argumento textual al tipo indicado (int o float) antes de llamar al pipeline.
     analizador = argparse.ArgumentParser(description="Estimar volumen nominal condicional de riego")
+    # --preparar reconstruye el CSV de observaciones desde las fuentes procesadas.
     analizador.add_argument("--preparar", action="store_true", help="Reconstruye CSV desde Arnesano")
+    # Estos tres parámetros forman una consulta manual; deben indicarse juntos.
     analizador.add_argument("--sector", type=int, help="Sector 1–5 para consulta manual")
     analizador.add_argument("--humedad", type=float, help="Humedad de suelo 0–100")
     analizador.add_argument("--dias", type=float, help="Días desde el último riego estándar terminado")
+    # Lee los argumentos escritos por el usuario y entrega sus valores al programa.
     ejecutar(analizador.parse_args())
